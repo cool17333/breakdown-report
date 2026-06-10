@@ -1,0 +1,22 @@
+{
+  "name": "breakdown-sharepoint-server",
+  "version": "1.0.0",
+  "description": "Local server สำหรับบันทึก Breakdown ลง SharePoint Excel",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.6.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "isomorphic-fetch": "^3.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบรายงาน Breakdown เครื่องจักร</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f3f4f6; color: #111827; }
+        textarea { resize: none; overflow: hidden; line-height: 1.6; }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:100;
+                    display:flex; align-items:center; justify-content:center; padding:1rem; }
+        .modal-bg.hidden { display:none; }
+
+        #toast { position:fixed; bottom:2rem; left:50%; transform:translateX(-50%); z-index:200;
+                 transition:opacity .3s; pointer-events:none; }
+        #toast.hidden { opacity:0; }
+
+        .why-box { transition:all .2s; border-top:3px solid #e5e7eb; }
+        .why-box:focus-within { border-color:#f97316; box-shadow:0 4px 6px -1px rgba(249,115,22,.1); }
+        .part-row:hover { background-color:#fffbf5; }
+
+        /* กันข้อความล้นกรอบใน badge / ปุ่มเล็ก ตอน export PDF/PNG (foreignObject) */
+        #report-content button,
+        #report-content label,
+        #report-content .absolute.rounded.shadow-md { white-space: nowrap; }
+
+        @media print {
+            .no-print { display:none !important; }
+            body { background:white; }
+            .shadow-xl,.shadow-sm,.shadow-md { box-shadow:none !important; }
+            input,select,textarea { border-color:transparent !important; background:transparent !important; }
+        }
+    </style>
+</head>
+<body class="selection:bg-orange-200 selection:text-orange-900">
+
+<!-- ==================== TAB NAV ==================== -->
+<div class="sticky top-0 z-50 bg-[#18181b] border-b border-gray-800 shadow-lg no-print">
+    <div class="max-w-6xl mx-auto px-4 flex items-center gap-1 h-14">
+        <button onclick="switchTab('form')"
+                id="btn-tab-form"
+                class="tab-btn px-5 py-2 rounded-lg font-bold text-sm transition-all text-gray-400 hover:text-white">
+            📝 บันทึก Breakdown
+        </button>
+        <button onclick="switchTab('records')"
+                id="btn-tab-records"
+                class="tab-btn px-5 py-2 rounded-lg font-bold text-sm transition-all text-gray-400 hover:text-white">
+            📋 รายการ
+        </button>
+        <button onclick="switchTab('summary')"
+                id="btn-tab-summary"
+                class="tab-btn px-5 py-2 rounded-lg font-bold text-sm transition-all text-gray-400 hover:text-white">
+            📊 สรุปข้อมูล
+        </button>
+        <div class="ml-auto">
+            <button onclick="openSettings()"
+                    class="text-gray-500 hover:text-orange-400 p-2 rounded-lg transition-colors text-lg"
+                    title="ตั้งค่าระบบ (GAS URL)">⚙️</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== TOAST ==================== -->
+<div id="toast" class="hidden">
+    <div id="toast-inner" class="px-6 py-3 rounded-full font-bold text-sm shadow-xl"></div>
+</div>
+
+<!-- ==================== SETTINGS MODAL ==================== -->
+<div id="settings-modal" class="modal-bg hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <h2 class="text-lg font-bold mb-1">⚙️ ตั้งค่าระบบ</h2>
+        <p class="text-xs text-gray-400 mb-4">เชื่อมต่อกับ Google Sheet ผ่าน Google Apps Script</p>
+
+        <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800 mb-4 space-y-1">
+            <p class="font-bold">📌 วิธีตั้งค่า (ทำครั้งเดียว):</p>
+            <p>1. เปิด <strong>gas_code.gs</strong> → ใส่ SPREADSHEET_ID</p>
+            <p>2. วางโค้ดใน <strong>script.google.com</strong> → Deploy → New deployment</p>
+            <p>3. Type: <strong>Web app</strong> / Execute as: <strong>Me</strong> / Access: <strong>Anyone</strong></p>
+            <p>4. คัดลอก Web App URL มาวางด้านล่าง</p>
+        </div>
+
+        <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">
+            Web App URL <span class="text-red-500">*</span>
+        </label>
+        <input id="gas-url-input" type="url"
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500 transition-colors"
+               placeholder="https://script.google.com/macros/s/.../exec">
+
+        <div class="flex gap-3 justify-end mt-5">
+            <button onclick="closeSettings()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ยกเลิก</button>
+            <button onclick="saveSettings()" class="px-6 py-2 bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-lg text-sm transition-colors">บันทึก</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== PDF PICKER MODAL ==================== -->
+<div id="pdf-picker-modal" class="modal-bg hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <h3 class="text-lg font-bold text-gray-900 mb-5 flex items-center gap-2">
+            <span class="text-orange-500">🖨️</span> เลือกรูปแบบ PDF
+        </h3>
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <!-- A4 Portrait -->
+            <label class="pdf-fmt-card cursor-pointer" data-fmt="portrait">
+                <input type="radio" name="pdf-fmt" value="portrait" class="hidden">
+                <div class="border-2 border-orange-500 bg-orange-50 rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:border-orange-400 pdf-card-inner">
+                    <div class="bg-white rounded-lg border border-gray-200 flex items-center justify-center shadow-sm" style="width:52px;height:70px">
+                        <svg class="w-7 h-9 text-gray-600" viewBox="0 0 24 32" fill="none">
+                            <rect x="2" y="1" width="20" height="28" rx="2" fill="#f3f4f6" stroke="currentColor" stroke-width="1.5"/>
+                            <line x1="5" y1="8"  x2="19" y2="8"  stroke="currentColor" stroke-width="1.5"/>
+                            <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.5"/>
+                            <line x1="5" y1="16" x2="14" y2="16" stroke="currentColor" stroke-width="1.5"/>
+                            <line x1="5" y1="20" x2="17" y2="20" stroke="currentColor" stroke-width="1.5"/>
+                        </svg>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm font-bold text-gray-800">PDF แนวตั้ง</p>
+                        <p class="text-xs text-gray-500">A4 Portrait</p>
+                    </div>
+                </div>
+            </label>
+            <!-- PNG สำหรับ PowerPoint -->
+            <label class="pdf-fmt-card cursor-pointer" data-fmt="ppt">
+                <input type="radio" name="pdf-fmt" value="ppt" class="hidden">
+                <div class="border-2 border-gray-200 rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:border-orange-400 pdf-card-inner">
+                    <div class="rounded-lg flex items-center justify-center shadow-sm" style="width:80px;height:46px;background:repeating-conic-gradient(#e5e7eb 0% 25%,#f9fafb 0% 50%) 50%/10px 10px;border:1px solid #d1d5db">
+                        <svg class="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5"/>
+                            <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 15l-5-5L5 21"/>
+                        </svg>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm font-bold text-gray-800">PNG รูปภาพ</p>
+                        <p class="text-xs text-gray-500">สำหรับ PowerPoint</p>
+                    </div>
+                </div>
+            </label>
+        </div>
+        <p class="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mb-5">
+            💡 PDF = ย่อเนื้อหาให้พอดีในหน้าเดียว &nbsp;•&nbsp; PNG = ภาพความละเอียดสูง วางใน PowerPoint แล้วลาก fit slide
+        </p>
+        <div class="flex gap-3 justify-end">
+            <button onclick="closePDFPicker()" class="px-5 py-2.5 rounded-full border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors">ยกเลิก</button>
+            <button id="btn-do-export" onclick="doExportPDF()"
+                    class="px-6 py-2.5 rounded-full bg-gray-900 text-white text-sm font-bold hover:bg-black transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                <span id="btn-do-export-label">Export PDF</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== CONFIRM MODAL ==================== -->
+<div id="confirm-modal" class="modal-bg hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <h2 class="text-base font-bold mb-3 flex items-center gap-2">
+            <span class="text-orange-500 text-xl">📤</span> ยืนยันการบันทึกข้อมูล
+        </h2>
+        <div id="confirm-summary" class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-2 mb-5"></div>
+        <div class="flex gap-3 justify-end">
+            <button onclick="closeConfirm()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ยกเลิก</button>
+            <button onclick="confirmAddData()" id="confirm-ok-btn"
+                    class="px-6 py-2 bg-gray-900 hover:bg-orange-500 text-white font-bold rounded-lg text-sm transition-colors flex items-center gap-2">
+                <span>✅</span> <span id="confirm-btn-label">บันทึกข้อมูล</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== TAB 1: FORM ==================== -->
+<div id="panel-form" class="tab-panel active p-4 md:p-8">
+<div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-200" id="report-content">
+
+    <!-- HEADER -->
+    <div class="bg-[#18181b] px-6 md:px-8 py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <p class="text-orange-500 text-xs font-bold uppercase tracking-widest mb-1">🔴 Breakdown Report — Machine</p>
+            <input type="text" id="machine-name"
+                   class="block text-2xl md:text-3xl font-bold text-white bg-transparent border-b-2 border-transparent hover:border-gray-600 focus:border-orange-500 outline-none transition-colors p-1 w-72 md:w-[36rem]"
+                   placeholder="ชื่อเครื่องจักร...">
+        </div>
+        <div id="status-container"
+             class="flex items-center gap-3 border-2 border-green-400 bg-green-900/30 rounded-full px-5 py-2.5 self-start md:self-auto cursor-pointer">
+            <span id="status-icon" class="text-base">✅</span>
+            <select onchange="updateStatus(this)"
+                    class="bg-transparent border-none outline-none font-bold text-sm text-green-400 cursor-pointer appearance-none">
+                <option value="done">ดำเนินการเสร็จสิ้น</option>
+                <option value="wip">กำลังดำเนินการ</option>
+                <option value="wait">รออะไหล่</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="p-6 md:p-8">
+
+    <!-- MACHINE + TIME INFO -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div>
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">โรงงาน (Factory)</label>
+            <select id="factory-select" onchange="updateAreaOptions()"
+                    class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+                <option value="">-- เลือกโรงงาน --</option>
+                <option value="1">โรงงาน 1</option>
+                <option value="2">โรงงาน 2</option>
+            </select>
+        </div>
+        <div>
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">พื้นที่ (Area)</label>
+            <select id="area-select"
+                    class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+                <option value="">-- เลือกโรงงานก่อน --</option>
+            </select>
+        </div>
+        <div>
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">รหัสเครื่องจักร (Machine ID)</label>
+            <input id="inp-machine-id" type="text" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors" placeholder="Machine ID...">
+        </div>
+        <div>
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">สาย / ตำแหน่ง (Line)</label>
+            <input id="inp-line" type="text" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors" placeholder="Line / Location...">
+        </div>
+        <div>
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">🕐 เวลาเริ่ม Breakdown</label>
+            <input type="datetime-local" id="bd-start" onchange="calcDowntime()"
+                   class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+        </div>
+        <div>
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">🕐 เวลาเสร็จสิ้น</label>
+            <input type="datetime-local" id="bd-end" onchange="calcDowntime()"
+                   class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+        </div>
+        <div>
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">⏱️ Downtime รวม</label>
+            <div class="flex items-center bg-orange-50 border-2 border-orange-300 rounded-lg px-3 py-2 h-[2.375rem]">
+                <span id="downtime-display" class="text-orange-700 font-bold text-sm w-full text-center tracking-wide">— ชม. — นาที</span>
+            </div>
+        </div>
+        <div>
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">ประเภท Breakdown</label>
+            <select id="inp-bd-type" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+                <option>Mechanical</option>
+                <option>Electrical</option>
+                <option>Pneumatic / Hydraulic</option>
+                <option>Software / Control</option>
+                <option>อื่นๆ (Other)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- PROBLEM + DEVICE + PHOTOS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="flex flex-col gap-5">
+            <div class="border border-gray-300 rounded-xl p-5 shadow-sm bg-white focus-within:ring-1 focus-within:ring-orange-500 focus-within:border-orange-500 transition-all flex-1">
+                <label class="text-gray-900 font-bold flex items-center mb-2 text-sm uppercase tracking-wide">
+                    <span class="mr-2 text-orange-500 text-xl">⚠️</span> ปัญหาที่พบ (PROBLEM)
+                </label>
+                <textarea id="inp-problem" class="w-full text-gray-700 bg-transparent outline-none auto-resize text-sm font-medium mt-1" rows="3"
+                          placeholder="ระบุรายละเอียดปัญหาที่พบ..."></textarea>
+            </div>
+            <div class="border border-gray-300 rounded-xl p-5 shadow-sm bg-white transition-all flex-1">
+                <div class="flex items-center justify-between mb-3">
+                    <label class="text-gray-900 font-bold flex items-center text-sm uppercase tracking-wide">
+                        <span class="mr-2 text-orange-500 text-xl">⚙️</span> อุปกรณ์ที่เกิดปัญหา
+                    </label>
+                    <button type="button" onclick="addDeviceRow()"
+                            class="text-xs font-bold px-3 py-1 rounded-lg bg-orange-500 hover:bg-orange-400 text-white transition-colors">
+                        + เพิ่ม
+                    </button>
+                </div>
+                <div id="device-list" class="space-y-2"></div>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div class="relative border-2 border-dashed border-red-300 hover:border-red-500 rounded-xl bg-red-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors" style="min-height:13rem;">
+                <div class="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md z-10">ก่อนแก้ไข</div>
+                <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="previewImage(event,'preview-before')">
+                <img id="preview-before" class="absolute inset-0 w-full h-full object-cover hidden">
+                <div class="text-red-300 group-hover:text-red-500 text-center flex flex-col items-center pointer-events-none">
+                    <svg class="w-8 h-8 mb-2 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <span class="text-xs font-semibold">คลิกเพื่ออัปโหลด</span>
+                </div>
+            </div>
+            <div class="relative border-2 border-dashed border-green-300 hover:border-green-500 rounded-xl bg-green-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors" style="min-height:13rem;">
+                <div class="absolute top-3 left-3 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md z-10">หลังแก้ไข</div>
+                <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="previewImage(event,'preview-after')">
+                <img id="preview-after" class="absolute inset-0 w-full h-full object-cover hidden">
+                <div class="text-green-300 group-hover:text-green-500 text-center flex flex-col items-center pointer-events-none">
+                    <svg class="w-8 h-8 mb-2 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <span class="text-xs font-semibold">คลิกเพื่ออัปโหลด</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WHY-WHY ANALYSIS -->
+    <div class="border border-gray-200 rounded-2xl p-6 shadow-sm mb-6 bg-white">
+        <div class="flex justify-between items-center mb-5">
+            <label class="text-gray-900 font-bold flex items-center text-base uppercase tracking-wide">
+                <span class="mr-2 text-orange-500">🔍</span> การวิเคราะห์สาเหตุ (WHY-WHY ANALYSIS)
+            </label>
+            <button id="add-why-btn" onclick="addWhy()"
+                    class="no-print bg-gray-900 text-white hover:bg-orange-500 px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center shadow-sm">
+                <span class="mr-1 text-lg leading-none">+</span> เพิ่ม Why
+            </button>
+        </div>
+        <div id="why-container" class="flex flex-col md:flex-row items-stretch gap-3 w-full">
+            <div class="why-item flex-1 relative bg-white border border-gray-200 rounded-xl p-4 shadow-sm group why-box">
+                <span class="font-bold text-orange-600 text-xs why-label block mb-2 uppercase tracking-widest">Why 1:</span>
+                <textarea class="w-full text-gray-800 text-sm outline-none resize-none auto-resize bg-transparent font-medium" rows="3" placeholder="ระบุสาเหตุที่ 1..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACTION + PREVENTION -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-[#18181b] rounded-2xl p-6 text-white shadow-md border border-gray-800 focus-within:border-orange-500 transition-all">
+            <label class="text-white text-sm font-bold flex items-center mb-3 uppercase tracking-wide border-b border-gray-700 pb-3">
+                <span class="mr-2 text-orange-500">🔧</span> มาตรการแก้ไข (CORRECTIVE ACTION)
+            </label>
+            <textarea id="inp-corrective" class="w-full bg-transparent text-gray-200 outline-none placeholder-gray-500 auto-resize text-sm font-medium mt-2" rows="5" placeholder="ระบุขั้นตอนการแก้ไขที่ดำเนินการไปแล้ว..."></textarea>
+        </div>
+        <div class="border border-gray-200 rounded-2xl p-6 shadow-sm bg-white focus-within:ring-1 focus-within:ring-orange-500 focus-within:border-orange-500 transition-all">
+            <label class="text-gray-900 font-bold flex items-center mb-3 text-sm uppercase tracking-wide border-b border-gray-100 pb-3">
+                <span class="mr-2 text-orange-500">🛡️</span> มาตรการป้องกัน (PREVENTIVE ACTION)
+            </label>
+            <textarea id="inp-preventive" class="w-full text-gray-700 bg-transparent outline-none auto-resize text-sm font-medium mt-2" rows="5" placeholder="ระบุมาตรการที่จะป้องกันไม่ให้เกิดซ้ำ..."></textarea>
+        </div>
+    </div>
+
+    <!-- SPARE PARTS -->
+    <div class="border border-gray-200 rounded-2xl overflow-hidden shadow-sm mb-6">
+        <div class="bg-[#18181b] px-6 py-4 flex justify-between items-center">
+            <label class="text-white font-bold text-sm uppercase tracking-wide flex items-center">
+                <span class="mr-2 text-orange-500">🔩</span> อะไหล่ที่ใช้ / เปลี่ยน (Spare Parts Used)
+            </label>
+            <button onclick="addPartRow()" class="no-print bg-orange-500 hover:bg-orange-400 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center shadow-sm">
+                <span class="mr-1 text-lg leading-none">+</span> เพิ่มรายการ
+            </button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider border-b border-gray-200">
+                        <th class="px-3 py-3 text-center w-10">#</th>
+                        <th class="px-4 py-3 text-left min-w-[200px]">ชื่ออะไหล่ (Part Name)</th>
+                        <th class="px-3 py-3 text-center w-32">Part No. / รหัส</th>
+                        <th class="px-3 py-3 text-center w-20">จำนวน (Qty)</th>
+                        <th class="px-3 py-3 text-center w-20">หน่วย (Unit)</th>
+                        <th class="px-3 py-3 text-left min-w-[160px]">หมายเหตุ (Remark)</th>
+                        <th class="no-print px-3 py-3 w-10"></th>
+                    </tr>
+                </thead>
+                <tbody id="parts-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+
+    </div><!-- end inner padding -->
+</div><!-- end report-content -->
+
+<!-- FORM EXPORT BUTTONS -->
+<div class="max-w-6xl mx-auto mt-6 no-print pb-10">
+    <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <button id="btn-export" onclick="showPDFPicker()"
+                class="bg-gray-900 hover:bg-black text-white font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm border border-gray-800">
+            <svg class="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Export PDF
+        </button>
+        <button onclick="showAddDataConfirm()"
+                class="bg-orange-500 hover:bg-orange-400 text-white font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            <span id="btn-add-label">Add Data → Google Sheet</span>
+        </button>
+        <button id="btn-cancel-edit" onclick="cancelEdit()"
+                class="hidden bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-4 px-8 rounded-full shadow transition-all text-sm">
+            ✕ ยกเลิกแก้ไข
+        </button>
+    </div>
+    <p id="loading-text" class="hidden mt-4 text-center text-gray-800 font-bold animate-pulse">กำลังประมวลผล PDF...</p>
+</div>
+</div><!-- end panel-form -->
+
+<!-- ==================== TAB 2: RECORDS ====================-->
+<div id="panel-records" class="tab-panel p-4 md:p-8">
+<div class="max-w-6xl mx-auto">
+
+    <!-- EDIT MODE BANNER -->
+    <div id="edit-banner" class="hidden mb-4 bg-amber-50 border-2 border-amber-400 rounded-2xl px-6 py-3 flex items-center justify-between">
+        <span class="text-amber-800 font-bold text-sm">✏️ กำลังแก้ไขรายการ — กลับไปที่แท็บ <strong>บันทึก</strong> เพื่อแก้ไขแล้วกด <strong>อัปเดต</strong></span>
+        <button onclick="cancelEdit()" class="text-xs font-bold text-amber-700 hover:text-red-600 underline">ยกเลิกแก้ไข</button>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">🔎 กรองข้อมูล</p>
+        <div class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">โรงงาน</label>
+                <select id="rec-factory" onchange="updateRecArea()"
+                        class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 cursor-pointer">
+                    <option value="">ทั้งหมด</option>
+                    <option value="โรงงาน 1">โรงงาน 1</option>
+                    <option value="โรงงาน 2">โรงงาน 2</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">พื้นที่</label>
+                <select id="rec-area" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 cursor-pointer">
+                    <option value="">ทั้งหมด</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">สถานะ</label>
+                <select id="rec-status" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 cursor-pointer">
+                    <option value="">ทั้งหมด</option>
+                    <option value="ดำเนินการเสร็จสิ้น">✅ เสร็จสิ้น</option>
+                    <option value="กำลังดำเนินการ">🟡 กำลังดำเนินการ</option>
+                    <option value="รออะไหล่">🔴 รออะไหล่</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">เดือน</label>
+                <input type="month" id="rec-month"
+                       class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 cursor-pointer">
+            </div>
+            <button onclick="loadRecords()"
+                    class="bg-gray-900 hover:bg-orange-500 text-white font-bold px-6 py-2 rounded-lg text-sm transition-all flex items-center gap-2">
+                <span>🔄</span> โหลดข้อมูล
+            </button>
+        </div>
+    </div>
+
+    <!-- NO URL WARNING -->
+    <div id="rec-no-url" class="hidden bg-purple-50 border border-purple-200 rounded-2xl p-8 text-center mb-6">
+        <p class="text-purple-700 font-bold text-base mb-2">⚠️ ยังไม่ได้ตั้งค่า URL สำหรับดึงข้อมูล</p>
+        <p class="text-purple-500 text-sm mb-4">กรุณาคลิก ⚙️ และใส่ <strong>HTTP POST URL (Flow ดึงข้อมูล)</strong></p>
+        <button onclick="openSettings()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-2 rounded-full text-sm transition-colors">ตั้งค่าระบบ</button>
+    </div>
+
+    <!-- LOADING -->
+    <div id="rec-loading" class="hidden text-center py-16">
+        <p class="text-gray-400 font-bold animate-pulse text-base">⏳ กำลังโหลดข้อมูล...</p>
+    </div>
+
+    <!-- TABLE -->
+    <div id="rec-table-wrap" class="hidden bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="bg-[#18181b] px-6 py-4 flex items-center justify-between">
+            <p class="text-white font-bold text-sm uppercase tracking-wide">📋 รายการ Breakdown ทั้งหมด</p>
+            <span id="rec-count" class="text-gray-400 text-xs font-bold"></span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+                        <th class="px-4 py-3 text-left">วันที่</th>
+                        <th class="px-4 py-3 text-left">เครื่องจักร</th>
+                        <th class="px-4 py-3 text-left">โรงงาน / พื้นที่</th>
+                        <th class="px-4 py-3 text-center">สถานะ</th>
+                        <th class="px-4 py-3 text-center">Downtime</th>
+                        <th class="px-4 py-3 text-center">ประเภท</th>
+                        <th class="px-4 py-3 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="rec-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- EMPTY -->
+    <div id="rec-empty" class="hidden text-center py-16">
+        <p class="text-gray-400 text-base">📭 ไม่พบข้อมูล</p>
+    </div>
+
+</div>
+</div><!-- end panel-records -->
+
+<!-- ==================== TAB 3: SUMMARY ==================== -->
+<div id="panel-summary" class="tab-panel p-4 md:p-8">
+<div class="max-w-6xl mx-auto">
+
+    <!-- FILTER BAR -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">🔎 กรองข้อมูล</p>
+        <div class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">ปี (Year)</label>
+                <select id="sum-year" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 cursor-pointer"></select>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">โรงงาน</label>
+                <select id="sum-factory" onchange="updateSumArea()"
+                        class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 cursor-pointer">
+                    <option value="">ทั้งหมด</option>
+                    <option value="โรงงาน1">โรงงาน 1</option>
+                    <option value="โรงงาน2">โรงงาน 2</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">พื้นที่</label>
+                <select id="sum-area" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 cursor-pointer">
+                    <option value="">ทั้งหมด</option>
+                </select>
+            </div>
+            <button onclick="loadSummary()"
+                    class="bg-gray-900 hover:bg-orange-500 text-white font-bold px-6 py-2 rounded-lg text-sm transition-all flex items-center gap-2">
+                <span>🔄</span> โหลดข้อมูล
+            </button>
+        </div>
+    </div>
+
+    <!-- NO GAS URL WARNING -->
+    <div id="sum-no-url" class="hidden bg-orange-50 border border-orange-200 rounded-2xl p-8 text-center mb-6">
+        <p class="text-orange-600 font-bold text-base mb-2">⚠️ ยังไม่ได้ตั้งค่า Google Apps Script URL</p>
+        <p class="text-orange-500 text-sm mb-4">กรุณาคลิก ⚙️ มุมขวาบน เพื่อตั้งค่า URL ก่อน</p>
+        <button onclick="openSettings()" class="bg-orange-500 hover:bg-orange-400 text-white font-bold px-6 py-2 rounded-full text-sm transition-colors">ตั้งค่าระบบ</button>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div id="sum-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 hidden">
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 text-center">
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">จำนวน Breakdown</p>
+            <p id="kpi-count" class="text-4xl font-bold text-gray-900">—</p>
+            <p class="text-xs text-gray-400 mt-1">ครั้ง</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 text-center">
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Downtime รวม</p>
+            <p id="kpi-total-dt" class="text-4xl font-bold text-orange-500">—</p>
+            <p class="text-xs text-gray-400 mt-1">ชั่วโมง</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 text-center">
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Avg Downtime / ครั้ง</p>
+            <p id="kpi-avg-dt" class="text-4xl font-bold text-gray-700">—</p>
+            <p class="text-xs text-gray-400 mt-1">ชั่วโมง</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 text-center">
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">รออะไหล่</p>
+            <p id="kpi-waiting" class="text-4xl font-bold text-red-500">—</p>
+            <p class="text-xs text-gray-400 mt-1">ครั้ง</p>
+        </div>
+    </div>
+
+    <!-- CHARTS -->
+    <div id="sum-charts" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 hidden">
+        <div class="md:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">📊 Breakdown รายเดือน</p>
+            <canvas id="chart-monthly" height="160"></canvas>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">🔧 ประเภท Breakdown</p>
+            <canvas id="chart-type" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- MONTHLY TABLE -->
+    <div id="sum-tables" class="hidden space-y-6">
+        <!-- Monthly summary table -->
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div class="bg-[#18181b] px-6 py-4">
+                <p class="text-white font-bold text-sm uppercase tracking-wide">📅 สรุปรายเดือน</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
+                            <th class="px-4 py-3 text-left">เดือน</th>
+                            <th class="px-4 py-3 text-center">จำนวน BD</th>
+                            <th class="px-4 py-3 text-center">Downtime รวม (ชม.)</th>
+                            <th class="px-4 py-3 text-center">Avg DT (ชม.)</th>
+                            <th class="px-4 py-3 text-center">Mechanical</th>
+                            <th class="px-4 py-3 text-center">Electrical</th>
+                            <th class="px-4 py-3 text-center">Pneumatic</th>
+                            <th class="px-4 py-3 text-center">Software</th>
+                            <th class="px-4 py-3 text-center">อื่นๆ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monthly-tbody"></tbody>
+                    <tfoot id="monthly-tfoot" class="bg-gray-50 font-bold"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Area breakdown table -->
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div class="bg-[#18181b] px-6 py-4">
+                <p class="text-white font-bold text-sm uppercase tracking-wide">📍 Breakdown แยกพื้นที่</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr id="area-table-head" class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider"></tr>
+                    </thead>
+                    <tbody id="area-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOADING / EMPTY STATE -->
+    <div id="sum-loading" class="hidden text-center py-16">
+        <p class="text-gray-400 font-bold animate-pulse text-base">⏳ กำลังโหลดข้อมูล...</p>
+    </div>
+    <div id="sum-empty" class="hidden text-center py-16">
+        <p class="text-gray-400 text-base">📭 ไม่พบข้อมูลในช่วงที่เลือก</p>
+    </div>
+
+</div>
+</div><!-- end panel-summary -->
+
+<script>
+// ============================================================
+// SETTINGS — Google Apps Script
+// ============================================================
+let GAS_URL = localStorage.getItem('gas_url') || '';
+
+function openSettings() {
+    document.getElementById('gas-url-input').value = GAS_URL;
+    document.getElementById('settings-modal').classList.remove('hidden');
+}
+function closeSettings() {
+    document.getElementById('settings-modal').classList.add('hidden');
+}
+function saveSettings() {
+    GAS_URL = document.getElementById('gas-url-input').value.trim();
+    localStorage.setItem('gas_url', GAS_URL);
+    closeSettings();
+    showToast('✅ บันทึกการตั้งค่าเรียบร้อย', 'success');
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function switchTab(name) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('bg-orange-500', 'text-white');
+        b.classList.add('text-gray-400');
+    });
+    document.getElementById('panel-' + name).classList.add('active');
+    const btn = document.getElementById('btn-tab-' + name);
+    btn.classList.add('bg-orange-500', 'text-white');
+    btn.classList.remove('text-gray-400');
+
+    if (name === 'summary') checkSummarySetup();
+    if (name === 'records') checkRecordsSetup();
+}
+
+function checkSummarySetup() {
+    document.getElementById('sum-no-url').classList.toggle('hidden', !!GAS_URL);
+}
+
+function checkRecordsSetup() {
+    document.getElementById('rec-no-url').classList.toggle('hidden', !!GAS_URL);
+}
+
+// ============================================================
+// TOAST NOTIFICATION
+// ============================================================
+let toastTimer;
+function showToast(msg, type = 'success') {
+    const toast = document.getElementById('toast');
+    const inner = document.getElementById('toast-inner');
+    const colors = {
+        success: 'bg-gray-900 text-white',
+        error:   'bg-red-600 text-white',
+        info:    'bg-blue-600 text-white',
+    };
+    inner.className = 'px-6 py-3 rounded-full font-bold text-sm shadow-xl ' + (colors[type] || colors.success);
+    inner.textContent = msg;
+    toast.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.add('hidden'), 3500);
+}
+
+// ============================================================
+// FACTORY / AREA COMBO (FORM)
+// ============================================================
+const AREA_MAP = {
+    '1': ['Frozen ดิบ', 'Frozen สุก', 'Chill ดิบ', 'Chill สุก'],
+    '2': ['Frozen dough', 'Sandwich โซนดิบ', 'Sandwich โซนสุก'],
+};
+const AREA_MAP_KEY = { 'โรงงาน1': AREA_MAP['1'], 'โรงงาน2': AREA_MAP['2'] };
+
+function updateAreaOptions() {
+    const factory = document.getElementById('factory-select').value;
+    const sel = document.getElementById('area-select');
+    sel.innerHTML = '';
+    if (!factory) { sel.innerHTML = '<option value="">-- เลือกโรงงานก่อน --</option>'; return; }
+    sel.innerHTML = '<option value="">-- เลือกพื้นที่ --</option>';
+    (AREA_MAP[factory] || []).forEach(a => {
+        const o = document.createElement('option');
+        o.value = o.textContent = a;
+        sel.appendChild(o);
+    });
+}
+
+// SUMMARY AREA FILTER
+function updateSumArea() {
+    const factory = document.getElementById('sum-factory').value;
+    const sel = document.getElementById('sum-area');
+    sel.innerHTML = '<option value="">ทั้งหมด</option>';
+    (AREA_MAP_KEY[factory] || []).forEach(a => {
+        const o = document.createElement('option');
+        o.value = o.textContent = a;
+        sel.appendChild(o);
+    });
+}
+
+// ============================================================
+// STATUS BADGE
+// ============================================================
+function updateStatus(sel) {
+    const container = document.getElementById('status-container');
+    const icon = document.getElementById('status-icon');
+    const cfg = {
+        done: { cls: 'border-green-400 bg-green-900/30', color: '#4ade80', icon: '✅' },
+        wip:  { cls: 'border-orange-400 bg-orange-900/30', color: '#fb923c', icon: '🔧' },
+        wait: { cls: 'border-red-400 bg-red-900/30', color: '#f87171', icon: '⏳' },
+    };
+    const c = cfg[sel.value] || cfg.done;
+    container.className = `flex items-center gap-3 border-2 ${c.cls} rounded-full px-5 py-2.5 self-start md:self-auto cursor-pointer`;
+    sel.style.color = c.color;
+    icon.textContent = c.icon;
+}
+
+// ============================================================
+// DOWNTIME CALCULATOR
+// ============================================================
+function calcDowntime() {
+    const s = document.getElementById('bd-start').value;
+    const e = document.getElementById('bd-end').value;
+    const d = document.getElementById('downtime-display');
+    if (!s || !e) { d.textContent = '— ชม. — นาที'; return; }
+    const diff = new Date(e) - new Date(s);
+    if (diff < 0) { d.textContent = '⚠️ เวลาไม่ถูกต้อง'; return; }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    d.textContent = `${h} ชม. ${m} นาที`;
+}
+
+// ============================================================
+// WHY-WHY ANALYSIS
+// ============================================================
+const MAX_WHYS = 5;
+function addWhy() {
+    const c = document.getElementById('why-container');
+    if (c.querySelectorAll('.why-item').length >= MAX_WHYS) return;
+    const n = c.querySelectorAll('.why-item').length + 1;
+    const arrow = document.createElement('div');
+    arrow.className = 'why-arrow hidden md:flex items-center justify-center text-gray-300 text-2xl font-light';
+    arrow.innerHTML = '➔';
+    c.appendChild(arrow);
+    const div = document.createElement('div');
+    div.className = 'why-item flex-1 relative bg-white border border-gray-200 rounded-xl p-4 shadow-sm group why-box';
+    div.innerHTML = `
+        <span class="font-bold text-orange-600 text-xs why-label block mb-2 uppercase tracking-widest">Why ${n}:</span>
+        <textarea class="w-full text-gray-800 text-sm outline-none resize-none auto-resize bg-transparent font-medium" rows="3" placeholder="ระบุสาเหตุที่ ${n}..."></textarea>
+        <button onclick="removeWhy(this)" class="no-print absolute top-3 right-3 text-gray-300 hover:text-white hover:bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all p-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>`;
+    c.appendChild(div);
+    div.querySelector('textarea').addEventListener('input', function() { this.style.height='auto'; this.style.height=this.scrollHeight+'px'; });
+    if (c.querySelectorAll('.why-item').length >= MAX_WHYS) document.getElementById('add-why-btn').style.visibility = 'hidden';
+}
+function removeWhy(btn) {
+    const item = btn.closest('.why-item');
+    const prev = item.previousElementSibling;
+    if (prev?.classList.contains('why-arrow')) prev.remove();
+    item.remove();
+    reindexWhys();
+    if (document.getElementById('why-container').querySelectorAll('.why-item').length < MAX_WHYS)
+        document.getElementById('add-why-btn').style.visibility = 'visible';
+}
+function reindexWhys() {
+    document.getElementById('why-container').querySelectorAll('.why-item').forEach((item, i) => {
+        item.querySelector('.why-label').textContent = 'Why ' + (i + 1) + ':';
+        item.querySelector('textarea').placeholder = 'ระบุสาเหตุที่ ' + (i + 1) + '...';
+        const btn = item.querySelector('button');
+        if (i === 0 && btn) btn.remove();
+    });
+}
+
+// ============================================================
+// DEVICE LIST
+// ============================================================
+function addDeviceRow(value = '') {
+    const list = document.getElementById('device-list');
+    const idx  = list.children.length + 1;
+    const row  = document.createElement('div');
+    row.className = 'flex items-center gap-2';
+    row.innerHTML = `
+        <span class="text-xs text-gray-400 font-bold w-5 text-right shrink-0">${idx}</span>
+        <input type="text" value="${value}"
+               class="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-orange-500 transition-colors"
+               placeholder="ชื่ออุปกรณ์ / ชิ้นส่วนที่เสียหาย...">
+        <button type="button" onclick="removeDeviceRow(this)"
+                class="text-gray-300 hover:text-red-500 transition-colors font-bold text-lg leading-none">×</button>`;
+    list.appendChild(row);
+    row.querySelector('input').focus();
+}
+
+function removeDeviceRow(btn) {
+    const list = document.getElementById('device-list');
+    btn.closest('div').remove();
+    // reindex
+    [...list.children].forEach((r, i) => {
+        r.querySelector('span').textContent = i + 1;
+    });
+    if (list.children.length === 0) addDeviceRow();
+}
+
+function collectDevices() {
+    return [...document.querySelectorAll('#device-list input')]
+        .map(i => i.value.trim())
+        .filter(Boolean)
+        .join(' | ');
+}
+
+// ============================================================
+// SPARE PARTS TABLE
+// ============================================================
+function createPartRow(index) {
+    const tr = document.createElement('tr');
+    tr.className = 'part-row border-b border-gray-100 transition-colors';
+    tr.innerHTML = `
+        <td class="px-3 py-2 text-center text-gray-400 font-bold text-sm part-num">${index}</td>
+        <td class="px-4 py-2"><input type="text" class="w-full bg-transparent outline-none text-gray-800 font-medium text-sm px-1" placeholder="ชื่ออะไหล่..."></td>
+        <td class="px-3 py-2"><input type="text" class="w-full bg-transparent outline-none text-gray-600 text-center text-sm px-1" placeholder="-"></td>
+        <td class="px-3 py-2"><input type="number" min="0" class="w-full bg-transparent outline-none text-gray-900 text-center font-bold text-sm px-1 border-b-2 border-gray-200 focus:border-orange-500 transition-colors" placeholder="0"></td>
+        <td class="px-3 py-2"><input type="text" class="w-full bg-transparent outline-none text-gray-600 text-center text-sm px-1" placeholder="ชิ้น"></td>
+        <td class="px-3 py-2"><input type="text" class="w-full bg-transparent outline-none text-gray-600 text-sm px-1" placeholder="หมายเหตุ..."></td>
+        <td class="no-print px-3 py-2 text-center">
+            <button onclick="removePartRow(this)" class="text-gray-300 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+        </td>`;
+    return tr;
+}
+function addPartRow() {
+    const tb = document.getElementById('parts-tbody');
+    tb.appendChild(createPartRow(tb.querySelectorAll('tr').length + 1));
+}
+function removePartRow(btn) {
+    btn.closest('tr').remove();
+    document.querySelectorAll('.part-num').forEach((el, i) => el.textContent = i + 1);
+}
+
+// ============================================================
+// PHOTOS
+// ============================================================
+function previewImage(event, imageId) {
+    if (!event.target.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = () => { const img = document.getElementById(imageId); img.src = reader.result; img.classList.remove('hidden'); };
+    reader.readAsDataURL(event.target.files[0]);
+}
+
+// ============================================================
+// COLLECT FORM DATA
+// ============================================================
+function collectFormData() {
+    const factory = document.getElementById('factory-select');
+    const area    = document.getElementById('area-select');
+    const statusSel = document.querySelector('#status-container select');
+    const statusMap = { done:'ดำเนินการเสร็จสิ้น', wip:'กำลังดำเนินการ', wait:'รออะไหล่' };
+
+    const bdStart = document.getElementById('bd-start').value;
+    const bdEnd   = document.getElementById('bd-end').value;
+    const downtimeMin = (bdStart && bdEnd)
+        ? Math.max(0, Math.floor((new Date(bdEnd) - new Date(bdStart)) / 60000))
+        : 0;
+
+    const whys = [...document.querySelectorAll('#why-container .why-item textarea')]
+        .map(t => t.value.trim());
+
+    const parts = [...document.querySelectorAll('#parts-tbody tr')].map(tr => {
+        const c = tr.querySelectorAll('input');
+        return { name: c[0]?.value||'', partNo: c[1]?.value||'', qty: c[2]?.value||'', unit: c[3]?.value||'', remark: c[4]?.value||'' };
+    });
+
+    const g = id => (document.getElementById(id)?.value||'').trim();
+
+    return {
+        timestamp:   new Date().toISOString(),
+        machineName: g('machine-name'),
+        factory:     factory.options[factory.selectedIndex]?.text || '',
+        area:        area.options[area.selectedIndex]?.text || '',
+        machineId:   g('inp-machine-id'),
+        line:        g('inp-line'),
+        status:      statusMap[statusSel?.value] || '',
+        bdStart,
+        bdEnd,
+        downtimeMin,
+        bdType:      document.getElementById('inp-bd-type')?.value || '',
+        problem:     g('inp-problem'),
+        device:      collectDevices(),
+        whys,
+        corrective:  g('inp-corrective'),
+        preventive:  g('inp-preventive'),
+        parts,
+    };
+}
+
+// ============================================================
+// ADD DATA CONFIRM FLOW
+// ============================================================
+function showAddDataConfirm() {
+    if (!GAS_URL) {
+        openSettings();
+        showToast('⚠️ กรุณาตั้งค่า Web App URL ก่อนบันทึกข้อมูล', 'error');
+        return;
+    }
+    const d = collectFormData();
+    if (!d.machineName) { showToast('⚠️ กรุณาระบุชื่อเครื่องจักร', 'error'); return; }
+    if (!d.factory)     { showToast('⚠️ กรุณาเลือกโรงงาน', 'error'); return; }
+    if (!d.bdStart)     { showToast('⚠️ กรุณาระบุเวลาเริ่ม Breakdown', 'error'); return; }
+
+    const h  = Math.floor(d.downtimeMin / 60);
+    const m  = d.downtimeMin % 60;
+    const dtText = d.downtimeMin ? `${h} ชม. ${m} นาที` : '—';
+
+    document.getElementById('confirm-summary').innerHTML = `
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+            <span class="text-gray-500 font-bold">เครื่องจักร</span>   <span class="font-bold text-gray-900">${d.machineName}</span>
+            <span class="text-gray-500 font-bold">โรงงาน</span>        <span>${d.factory}</span>
+            <span class="text-gray-500 font-bold">พื้นที่</span>         <span>${d.area || '—'}</span>
+            <span class="text-gray-500 font-bold">เวลาเริ่ม</span>      <span>${d.bdStart.replace('T',' ')}</span>
+            <span class="text-gray-500 font-bold">เวลาเสร็จ</span>      <span>${d.bdEnd ? d.bdEnd.replace('T',' ') : '—'}</span>
+            <span class="text-gray-500 font-bold">Downtime</span>       <span class="font-bold text-orange-500">${dtText}</span>
+            <span class="text-gray-500 font-bold">ประเภท</span>         <span>${d.bdType}</span>
+            <span class="text-gray-500 font-bold">สถานะ</span>          <span>${d.status}</span>
+        </div>
+        ${d.problem ? `<div class="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-600"><span class="font-bold">ปัญหา: </span>${d.problem.slice(0,120)}${d.problem.length>120?'…':''}</div>` : ''}`;
+
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeConfirm() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+}
+
+async function confirmAddData() {
+    const btn = document.getElementById('confirm-ok-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-spin">⏳</span> กำลังบันทึก...';
+
+    const data = collectFormData();
+
+    try {
+        if (editMode && editRowIndex) {
+            // อัปเดตแถวเดิม
+            await fetch(GAS_URL, {
+                method: 'POST', mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'update', rowIndex: editRowIndex, sheetName: editSheetName, ...data }),
+            });
+            closeConfirm();
+            cancelEdit();
+            showToast('✅ อัปเดตข้อมูลสำเร็จ', 'success');
+        } else {
+            // บันทึกใหม่
+            await fetch(GAS_URL, {
+                method: 'POST', mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            closeConfirm();
+            const month = new Date().toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+            showToast(`✅ บันทึกเข้า Google Sheet สำเร็จ → ${data.factory} (${month})`, 'success');
+        }
+    } catch (err) {
+        showToast('❌ เกิดข้อผิดพลาด: ' + err.message, 'error');
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<span>✅</span> <span id="confirm-btn-label">${editMode ? 'อัปเดตข้อมูล' : 'บันทึกเข้า Google Sheet'}</span>`;
+    }
+}
+
+// ============================================================
+// EDIT MODE
+// ============================================================
+let editMode      = false;
+let editRowIndex  = null;
+let editSheetName = null;
+
+function openEditMode(item) {
+    editMode      = true;
+    editRowIndex  = item.rowIndex;
+    editSheetName = item.sheetName;
+
+    // fill form
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+    set('machine-name',   item.machineName);
+    set('inp-machine-id', item.machineId);
+    set('inp-line',       item.line);
+    set('bd-start',       item.bdStart);
+    set('bd-end',         item.bdEnd);
+    set('inp-problem',    item.problem);
+    set('inp-corrective', item.corrective);
+    set('inp-preventive', item.preventive);
+
+    // factory + area
+    const fSel = document.getElementById('factory-select');
+    [...fSel.options].forEach(o => { if (o.text === item.factory) o.selected = true; });
+    updateAreaOptions();
+    setTimeout(() => {
+        const aSel = document.getElementById('area-select');
+        [...aSel.options].forEach(o => { if (o.value === item.area || o.text === item.area) o.selected = true; });
+    }, 50);
+
+    // status
+    const statusRevMap = { 'ดำเนินการเสร็จสิ้น':'done', 'กำลังดำเนินการ':'wip', 'รออะไหล่':'wait' };
+    const sSel = document.querySelector('#status-container select');
+    if (sSel) { sSel.value = statusRevMap[item.status] || 'done'; updateStatus(sSel); }
+
+    // bdType
+    const typeSel = document.getElementById('inp-bd-type');
+    if (typeSel) typeSel.value = item.bdType || 'Mechanical';
+
+    // devices
+    const dList = document.getElementById('device-list');
+    dList.innerHTML = '';
+    (item.device || '').split(' | ').filter(Boolean).forEach(d => addDeviceRow(d));
+    if (!dList.children.length) addDeviceRow();
+
+    // whys
+    const wContainer = document.getElementById('why-container');
+    wContainer.innerHTML = '';
+    whyCount = 0;
+    const whys = item.whys || [];
+    if (!whys.length) addWhy();
+    else whys.forEach(w => { addWhy(); const boxes = wContainer.querySelectorAll('.why-item textarea'); boxes[boxes.length-1].value = w; });
+
+    calcDowntime();
+
+    // update buttons
+    document.getElementById('btn-add-label').textContent  = 'อัปเดตข้อมูล';
+    document.getElementById('btn-cancel-edit').classList.remove('hidden');
+    setVisible('edit-banner', true);
+
+    switchTab('form');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast('✏️ โหลดข้อมูลสำหรับแก้ไขแล้ว', 'info');
+}
+
+function cancelEdit() {
+    editMode = editRowIndex = editSheetName = null;
+    editMode = false;
+    document.getElementById('btn-add-label').textContent = 'Add Data → Google Sheet';
+    document.getElementById('btn-cancel-edit').classList.add('hidden');
+    setVisible('edit-banner', false);
+}
+
+// ============================================================
+// RECORDS — LOAD & RENDER
+// ============================================================
+function updateRecArea() {
+    const fac = document.getElementById('rec-factory').value;
+    const sel = document.getElementById('rec-area');
+    sel.innerHTML = '<option value="">ทั้งหมด</option>';
+    const key = fac.replace('โรงงาน ','');
+    (AREA_MAP[key] || []).forEach(a => {
+        const o = document.createElement('option'); o.value = o.textContent = a; sel.appendChild(o);
+    });
+}
+
+async function loadRecords() {
+    if (!GAS_URL) { openSettings(); return; }
+
+    const factory = document.getElementById('rec-factory').value;
+    const area    = document.getElementById('rec-area').value;
+    const status  = document.getElementById('rec-status').value;
+    const month   = document.getElementById('rec-month').value;
+
+    setVisible('rec-no-url',    false);
+    setVisible('rec-loading',   true);
+    setVisible('rec-table-wrap',false);
+    setVisible('rec-empty',     false);
+
+    try {
+        const params = new URLSearchParams({ action:'getAll', factory, area, status, month });
+        const res  = await fetch(`${GAS_URL}?${params}`);
+        const json = await res.json();
+
+        setVisible('rec-loading', false);
+        if (!json.success || !json.data?.length) { setVisible('rec-empty', true); return; }
+
+        renderRecordsTable(json.data);
+    } catch (err) {
+        setVisible('rec-loading', false);
+        showToast('❌ โหลดข้อมูลไม่สำเร็จ: ' + err.message, 'error');
+    }
+}
+
+const STATUS_BADGE = {
+    'ดำเนินการเสร็จสิ้น': 'bg-green-100 text-green-700',
+    'กำลังดำเนินการ':     'bg-yellow-100 text-yellow-700',
+    'รออะไหล่':           'bg-red-100 text-red-700',
+};
+
+function renderRecordsTable(rows) {
+    const tbody = document.getElementById('rec-tbody');
+    document.getElementById('rec-count').textContent = `${rows.length} รายการ`;
+    tbody.innerHTML = rows.map((r, idx) => {
+        const dt   = r.downtimeMin ? `${Math.floor(r.downtimeMin/60)}ชม.${r.downtimeMin%60}น.` : '—';
+        const date = (r.timestamp||'').slice(0,10);
+        const badge= STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600';
+        const isPending = r.status !== 'ดำเนินการเสร็จสิ้น';
+        return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+            <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${date}</td>
+            <td class="px-4 py-3 font-bold text-gray-900 text-sm">${r.machineName||'—'}</td>
+            <td class="px-4 py-3 text-xs text-gray-600">${r.factory||''}<br><span class="text-gray-400">${r.area||''}</span></td>
+            <td class="px-4 py-3 text-center">
+                <span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold ${badge}">${r.status||'—'}</span>
+            </td>
+            <td class="px-4 py-3 text-center text-sm font-bold text-orange-600">${dt}</td>
+            <td class="px-4 py-3 text-center text-xs text-gray-500">${r.bdType||'—'}</td>
+            <td class="px-4 py-3 text-center">
+                <div class="flex gap-1 justify-center">
+                    ${isPending ? `<button onclick='openEditMode(${JSON.stringify(r).replace(/'/g,"&#39;")})'
+                        class="text-xs font-bold px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-700 transition-colors">✏️ แก้ไข</button>` : ''}
+                    <button onclick='exportRowPDF(${JSON.stringify(r).replace(/'/g,"&#39;")})'
+                        class="text-xs font-bold px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">📄 PDF</button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+    setVisible('rec-table-wrap', true);
+}
+
+// ============================================================
+// SUMMARY — LOAD & RENDER
+// ============================================================
+let chartMonthly = null;
+let chartType = null;
+
+const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const BD_TYPES   = ['Mechanical','Electrical','Pneumatic / Hydraulic','Software / Control','อื่นๆ (Other)'];
+
+async function loadSummary() {
+    if (!GAS_URL) { openSettings(); return; }
+
+    const year    = document.getElementById('sum-year').value;
+    const factory = document.getElementById('sum-factory').value;
+    const area    = document.getElementById('sum-area').value;
+
+    setVisible('sum-loading', true);
+    setVisible('sum-kpis', false);
+    setVisible('sum-charts', false);
+    setVisible('sum-tables', false);
+    setVisible('sum-empty', false);
+
+    try {
+        const url  = `${GAS_URL}?action=getData&year=${year}&factory=${encodeURIComponent(factory)}&area=${encodeURIComponent(area)}`;
+        const res  = await fetch(url);
+        const json = await res.json();
+
+        setVisible('sum-loading', false);
+
+        if (!json.success || !json.data?.length) {
+            setVisible('sum-empty', true);
+            return;
+        }
+
+        renderSummary(json.data, year, factory, area);
+
+    } catch (err) {
+        setVisible('sum-loading', false);
+        showToast('❌ โหลดข้อมูลไม่สำเร็จ: ' + err.message, 'error');
+        console.error(err);
+    }
+}
+
+function setVisible(id, show) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    show ? el.classList.remove('hidden') : el.classList.add('hidden');
+}
+
+function renderSummary(rows, year, factory, area) {
+    // KPIs
+    const totalCount   = rows.length;
+    const totalDtMin   = rows.reduce((s, r) => s + (r.downtimeMin || 0), 0);
+    const avgDtMin     = totalCount ? totalDtMin / totalCount : 0;
+    const waitingCount = rows.filter(r => r.status === 'รออะไหล่').length;
+
+    document.getElementById('kpi-count').textContent    = totalCount;
+    document.getElementById('kpi-total-dt').textContent = (totalDtMin / 60).toFixed(1);
+    document.getElementById('kpi-avg-dt').textContent   = (avgDtMin / 60).toFixed(1);
+    document.getElementById('kpi-waiting').textContent  = waitingCount;
+    setVisible('sum-kpis', true);
+
+    // Group by month (1-12)
+    const byMonth = Array.from({ length: 12 }, () => ({ count: 0, dtMin: 0, types: {} }));
+    rows.forEach(r => {
+        const m = parseInt((r.month || '').split('-')[1] || '0') - 1;
+        if (m < 0 || m > 11) return;
+        byMonth[m].count++;
+        byMonth[m].dtMin += r.downtimeMin || 0;
+        const t = r.bdType || 'อื่นๆ (Other)';
+        byMonth[m].types[t] = (byMonth[m].types[t] || 0) + 1;
+    });
+
+    // Monthly bar chart
+    const counts = byMonth.map(m => m.count);
+    const dtHours = byMonth.map(m => +(m.dtMin / 60).toFixed(1));
+
+    if (chartMonthly) chartMonthly.destroy();
+    chartMonthly = new Chart(document.getElementById('chart-monthly'), {
+        type: 'bar',
+        data: {
+            labels: MONTHS_TH,
+            datasets: [
+                { label: 'จำนวน BD (ครั้ง)', data: counts, backgroundColor: '#f97316', borderRadius: 6, yAxisID: 'y' },
+                { label: 'Downtime (ชม.)',    data: dtHours, backgroundColor: '#93c5fd', borderRadius: 6, yAxisID: 'y1', type: 'line', borderColor: '#3b82f6', tension: 0.3, fill: false, pointRadius: 4 },
+            ],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { font: { family: 'Prompt', size: 11 } } } },
+            scales: {
+                y:  { beginAtZero: true, title: { display: true, text: 'ครั้ง' } },
+                y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'ชม.' }, grid: { drawOnChartArea: false } },
+            },
+        },
+    });
+
+    // Type donut chart
+    const typeCounts = BD_TYPES.map(t => rows.filter(r => r.bdType === t).length);
+    const typeColors = ['#f97316','#3b82f6','#10b981','#8b5cf6','#6b7280'];
+
+    if (chartType) chartType.destroy();
+    chartType = new Chart(document.getElementById('chart-type'), {
+        type: 'doughnut',
+        data: {
+            labels: BD_TYPES.map(t => t.replace(' / Hydraulic','').replace(' / Control','')),
+            datasets: [{ data: typeCounts, backgroundColor: typeColors, borderWidth: 2 }],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom', labels: { font: { family: 'Prompt', size: 10 }, boxWidth: 12 } },
+            },
+        },
+    });
+
+    setVisible('sum-charts', true);
+
+    // Monthly table
+    const tb = document.getElementById('monthly-tbody');
+    tb.innerHTML = '';
+    byMonth.forEach((m, i) => {
+        if (m.count === 0) { tb.appendChild(emptyMonthRow(i)); return; }
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-gray-100 hover:bg-gray-50';
+        tr.innerHTML = `
+            <td class="px-4 py-2.5 font-medium text-gray-700">${MONTHS_TH[i]} ${year}</td>
+            <td class="px-4 py-2.5 text-center font-bold text-gray-900">${m.count}</td>
+            <td class="px-4 py-2.5 text-center text-orange-600 font-bold">${(m.dtMin/60).toFixed(1)}</td>
+            <td class="px-4 py-2.5 text-center text-gray-600">${m.count ? (m.dtMin/60/m.count).toFixed(1) : '—'}</td>
+            ${BD_TYPES.map(t => `<td class="px-4 py-2.5 text-center text-gray-600">${m.types[t]||0}</td>`).join('')}`;
+        tb.appendChild(tr);
+    });
+
+    // Total row
+    document.getElementById('monthly-tfoot').innerHTML = `
+        <tr class="border-t-2 border-gray-300 bg-gray-100">
+            <td class="px-4 py-2.5 font-bold text-gray-900">รวมทั้งปี</td>
+            <td class="px-4 py-2.5 text-center font-bold text-gray-900">${totalCount}</td>
+            <td class="px-4 py-2.5 text-center font-bold text-orange-600">${(totalDtMin/60).toFixed(1)}</td>
+            <td class="px-4 py-2.5 text-center font-bold text-gray-700">${(avgDtMin/60).toFixed(1)}</td>
+            ${BD_TYPES.map(t => `<td class="px-4 py-2.5 text-center font-bold text-gray-700">${rows.filter(r=>r.bdType===t).length}</td>`).join('')}
+        </tr>`;
+
+    // Area breakdown table
+    const areas = [...new Set(rows.map(r => r.area).filter(Boolean))].sort();
+    const months = MONTHS_TH.map((m, i) => ({ label: m, idx: i })).filter(m => byMonth[m.idx].count > 0);
+
+    document.getElementById('area-table-head').innerHTML =
+        `<th class="px-4 py-3 text-left">พื้นที่</th>` +
+        months.map(m => `<th class="px-4 py-3 text-center">${m.label}</th>`).join('') +
+        `<th class="px-4 py-3 text-center">รวม BD</th><th class="px-4 py-3 text-center">รวม DT (ชม.)</th>`;
+
+    const atb = document.getElementById('area-tbody');
+    atb.innerHTML = '';
+    areas.forEach(a => {
+        const aRows = rows.filter(r => r.area === a);
+        const aDt = aRows.reduce((s, r) => s + (r.downtimeMin || 0), 0);
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-gray-100 hover:bg-gray-50';
+        tr.innerHTML =
+            `<td class="px-4 py-2.5 font-medium text-gray-700">${a}</td>` +
+            months.map(m => {
+                const c = aRows.filter(r => parseInt((r.month||'').split('-')[1]||0)-1 === m.idx).length;
+                return `<td class="px-4 py-2.5 text-center ${c ? 'font-bold text-gray-900' : 'text-gray-300'}">${c||'—'}</td>`;
+            }).join('') +
+            `<td class="px-4 py-2.5 text-center font-bold text-gray-900">${aRows.length}</td>` +
+            `<td class="px-4 py-2.5 text-center font-bold text-orange-500">${(aDt/60).toFixed(1)}</td>`;
+        atb.appendChild(tr);
+    });
+
+    setVisible('sum-tables', true);
+}
+
+function emptyMonthRow(i) {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-gray-100';
+    tr.innerHTML = `<td class="px-4 py-2 text-gray-300 text-sm">${MONTHS_TH[i]}</td>${Array(8).fill('<td class="px-4 py-2 text-center text-gray-200 text-sm">—</td>').join('')}`;
+    return tr;
+}
+
+// ============================================================
+// PDF PICKER + EXPORT
+// ============================================================
+let _pdfPickerForRow = null; // ใช้เมื่อ export จาก records tab
+
+function _setExportBtnLabel(fmt) {
+    const lbl = document.getElementById('btn-do-export-label');
+    if (lbl) lbl.textContent = (fmt === 'ppt') ? 'Export PNG' : 'Export PDF';
+}
+
+function showPDFPicker(itemForRow) {
+    _pdfPickerForRow = itemForRow || null;
+    // reset selection → default portrait
+    document.querySelectorAll('.pdf-fmt-card').forEach(card => {
+        const val = card.dataset.fmt;
+        const inner = card.querySelector('.pdf-card-inner');
+        inner.classList.toggle('border-orange-500', val === 'portrait');
+        inner.classList.toggle('border-gray-200',   val !== 'portrait');
+        inner.classList.toggle('bg-orange-50',      val === 'portrait');
+        card.querySelector('input').checked = (val === 'portrait');
+    });
+    _setExportBtnLabel('portrait');
+    document.getElementById('pdf-picker-modal').classList.remove('hidden');
+}
+
+function closePDFPicker() {
+    document.getElementById('pdf-picker-modal').classList.add('hidden');
+    _pdfPickerForRow = null;
+}
+
+function initPDFCards() {
+    document.querySelectorAll('.pdf-fmt-card').forEach(card => {
+        card.addEventListener('click', () => {
+            document.querySelectorAll('.pdf-fmt-card').forEach(c => {
+                const inner = c.querySelector('.pdf-card-inner');
+                inner.classList.remove('border-orange-500', 'bg-orange-50');
+                inner.classList.add('border-gray-200');
+                c.querySelector('input').checked = false;
+            });
+            const inner = card.querySelector('.pdf-card-inner');
+            inner.classList.add('border-orange-500', 'bg-orange-50');
+            inner.classList.remove('border-gray-200');
+            card.querySelector('input').checked = true;
+            _setExportBtnLabel(card.dataset.fmt);
+        });
+    });
+}
+
+async function doExportPDF() {
+    closePDFPicker();
+    const fmt  = document.querySelector('input[name="pdf-fmt"]:checked')?.value || 'landscape';
+    if (_pdfPickerForRow) {
+        openEditMode(_pdfPickerForRow);
+        setTimeout(() => exportPDF(fmt), 450);
+    } else {
+        exportPDF(fmt);
+    }
+}
+
+function exportRowPDF(item) {
+    showPDFPicker(item);
+}
+
+// ===================================================================
+// EXPORT ENGINE — เรียก html2canvas + jsPDF โดยตรง (ไม่ผ่าน html2pdf)
+//   portrait → PDF custom page เต็มเนื้อหา 1 หน้า
+//   ppt      → PNG ความละเอียดสูง สำหรับ PowerPoint
+// ใช้ clone ลง wrapper ที่ (0,0) → ตัด mx-auto/padding → ไม่ขาดซ้าย
+// foreignObjectRendering → ให้ browser render เอง → ภาษาไทยไม่เพี้ยน
+// ===================================================================
+async function exportPDF(fmt = 'portrait') {
+    if (typeof html2canvas === 'undefined') { alert('ไม่พบไลบรารี html2canvas'); return; }
+
+    const btn    = document.getElementById('btn-export');
+    const loader = document.getElementById('loading-text');
+    const el     = document.getElementById('report-content');
+    const name   = document.getElementById('machine-name')?.value?.trim() || 'Breakdown';
+    const isPNG  = (fmt === 'ppt');
+
+    btn.disabled = true; btn.classList.add('opacity-50');
+    loader.classList.remove('hidden');
+    window.scrollTo(0, 0);
+
+    // รอฟอนต์ก่อน → กันตัวหนังสือเพี้ยน
+    try { if (document.fonts?.ready) await document.fonts.ready; } catch (_) {}
+
+    const CAP_W = isPNG ? 1900 : 1150;
+
+    // ---- ย้าย element ไป wrapper ที่ (0,0) ----
+    const parent      = el.parentNode;
+    const placeholder = document.createComment('rc-ph');
+    parent.insertBefore(placeholder, el);
+
+    const prevStyle = el.getAttribute('style') || '';
+    const prevClass = el.className;
+    el.classList.remove('overflow-hidden');
+    el.style.cssText = `width:${CAP_W}px;max-width:${CAP_W}px;margin:0;border-radius:0;box-shadow:none`;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText =
+        `position:fixed;top:0;left:0;z-index:2147483647;background:#ffffff;width:${CAP_W}px;padding:0;margin:0`;
+    wrapper.appendChild(el);
+    document.body.appendChild(wrapper);
+
+    function _download(href, filename) {
+        const a = Object.assign(document.createElement('a'),
+                    { href, download: filename, style: 'display:none' });
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 200);
+    }
+
+    try {
+        // รอ layout settle
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        const fullH = wrapper.scrollHeight;
+
+        // ---------- render ----------
+        const canvas = await html2canvas(wrapper, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            foreignObjectRendering: true,
+            logging: false,
+            width: CAP_W,
+            height: fullH,
+            windowWidth: CAP_W,
+            windowHeight: fullH,
+            scrollX: 0,
+            scrollY: 0,
+            x: 0,
+            y: 0,
+        });
+
+        if (isPNG) {
+            // ===== PNG สำหรับ PowerPoint =====
+            _download(canvas.toDataURL('image/png'), `BD_${name}.png`);
+
+        } else {
+            // ===== PDF — custom page เต็มเนื้อหา 100% =====
+            const { jsPDF } = window.jspdf;
+            const M     = 18;                              // margin (pt)
+            const pW    = 595;                             // A4 portrait width
+            const ratio = canvas.width / canvas.height;
+            const dW    = pW - M * 2;
+            const dH    = dW / ratio;
+            const pH    = dH + M * 2;
+
+            const pdf = new jsPDF({ unit:'pt', format:[pW, pH], orientation:'portrait' });
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', M, M, dW, dH);
+            _download(pdf.output('datauristring'), `BD_${name}.pdf`);
+        }
+    } catch (err) {
+        console.error('[exportPDF]', err);
+        alert('เกิดข้อผิดพลาด: ' + (err?.message || String(err)));
+    } finally {
+        // ---- ย้าย element กลับที่เดิม ----
+        parent.insertBefore(el, placeholder);
+        placeholder.remove();
+        wrapper.remove();
+        el.className = prevClass;
+        el.setAttribute('style', prevStyle);
+        btn.disabled = false; btn.classList.remove('opacity-50');
+        loader.classList.add('hidden');
+    }
+}
+
+// ============================================================
+// AUTO-RESIZE TEXTAREAS
+// ============================================================
+function initAutoResize() {
+    document.querySelectorAll('.auto-resize').forEach(ta => {
+        ta.addEventListener('input', function() { this.style.height='auto'; this.style.height=this.scrollHeight+'px'; });
+    });
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+    initAutoResize();
+    initPDFCards();
+    addDeviceRow();
+    addPartRow();
+
+    // Set active tab style
+    switchTab('form');
+
+    // Year options (current ± 2)
+    const cy = new Date().getFullYear();
+    const ys = document.getElementById('sum-year');
+    for (let y = cy + 1; y >= cy - 2; y--) {
+        const o = document.createElement('option');
+        o.value = o.textContent = y;
+        if (y === cy) o.selected = true;
+        ys.appendChild(o);
+    }
+});
+</script>
+</body>
+</html>
