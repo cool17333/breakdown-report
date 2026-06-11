@@ -380,14 +380,14 @@
         <p class="text-orange-500 text-xs font-bold tracking-widest uppercase mb-1">● BREAKDOWN REPORT — รูปภาพประกอบ</p>
         <h1 id="gallery-title" class="text-white text-2xl md:text-3xl font-bold">ชื่อเครื่องจักร...</h1>
     </div>
-    <div class="p-8 space-y-6">
-        <div class="border-2 border-dashed border-red-300 rounded-xl bg-red-50/40 p-5">
+    <div id="gallery-wrap" class="p-8">
+        <div id="gallery-frame-before" class="border-2 border-dashed border-red-300 rounded-xl bg-red-50/40 p-5">
             <div class="bg-red-600 text-white text-sm font-bold px-4 py-1.5 rounded shadow-md inline-block mb-4" style="white-space:nowrap">ก่อนแก้ไข</div>
-            <div id="gallery-before" class="grid grid-cols-2 gap-4"></div>
+            <div id="gallery-before"></div>
         </div>
-        <div class="border-2 border-dashed border-green-300 rounded-xl bg-green-50/40 p-5">
+        <div id="gallery-frame-after" class="border-2 border-dashed border-green-300 rounded-xl bg-green-50/40 p-5">
             <div class="bg-green-600 text-white text-sm font-bold px-4 py-1.5 rounded shadow-md inline-block mb-4" style="white-space:nowrap">หลังแก้ไข</div>
-            <div id="gallery-after" class="grid grid-cols-2 gap-4"></div>
+            <div id="gallery-after"></div>
         </div>
     </div>
 </div>
@@ -1019,15 +1019,29 @@ function resetImages() {
 }
 
 // สร้างหน้า gallery (รูปทั้งหมด) สำหรับ export
-function buildGallery() {
+function buildGallery(mode = 'pdf') {
     document.getElementById('gallery-title').textContent =
         document.getElementById('machine-name')?.value?.trim() || 'ชื่อเครื่องจักร...';
+
+    // layout ต่างกันตาม platform
+    //   pdf → เรียงแนวตั้ง (ก่อนบน-หลังล่าง) 2 คอลัมน์ → เต็มหน้า A4 รูปใหญ่
+    //   png → เรียงข้างกัน (ก่อน|หลัง) 3 คอลัมน์ → ภาพแนวนอนกะทัดรัด สเกลเท่าหน้าข้อมูล
+    const wrap = document.getElementById('gallery-wrap');
+    const cols = mode === 'png' ? 3 : 2;
+    if (mode === 'png') {
+        wrap.style.cssText = 'padding:32px;display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start';
+    } else {
+        wrap.style.cssText = 'padding:32px;display:flex;flex-direction:column;gap:24px';
+    }
+    const gridCss = `display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:16px`;
+    document.getElementById('gallery-before').style.cssText = gridCss;
+    document.getElementById('gallery-after').style.cssText  = gridCss;
 
     const fill = (containerId, list) => {
         const c = document.getElementById(containerId);
         c.innerHTML = '';
         if (!list.length) {
-            c.innerHTML = '<p class="col-span-2 text-center text-gray-400 text-sm py-8">— ไม่มีรูป —</p>';
+            c.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#9ca3af;font-size:13px;padding:24px">— ไม่มีรูป —</p>';
             return;
         }
         list.forEach(src => {
@@ -1587,6 +1601,7 @@ async function _captureNode(node, capW) {
     const prevStyle = node.getAttribute('style') || '';
     const prevClass = node.className;
     node.classList.remove('overflow-hidden');
+    node.classList.add('capture-fix');
     node.style.cssText = `width:${capW}px;max-width:${capW}px;margin:0;border-radius:0;box-shadow:none;display:block`;
 
     // ซ่อน element ที่ไม่ต้องการใน export
@@ -1594,6 +1609,18 @@ async function _captureNode(node, capW) {
     const hidden = [...node.querySelectorAll('.no-export, .no-print, button')].map(e => {
         const d = e.style.display; e.style.display = 'none'; return [e, d];
     });
+
+    // แก้ html2canvas คลิปสระบน/วรรณยุกต์ไทย → เพิ่ม line-height + ที่ว่างใน input
+    const fixStyle = document.createElement('style');
+    fixStyle.textContent = `
+        .capture-fix * { line-height: 1.7 !important; }
+        .capture-fix input, .capture-fix textarea, .capture-fix select {
+            height: auto !important; min-height: 2.6em !important;
+            padding-top: 7px !important; padding-bottom: 7px !important;
+            line-height: 1.9 !important;
+        }
+        .capture-fix .why-node-input { min-height: 2.8em !important; }`;
+    document.head.appendChild(fixStyle);
 
     const wrapper = document.createElement('div');
     wrapper.style.cssText =
@@ -1615,6 +1642,7 @@ async function _captureNode(node, capW) {
         parent.insertBefore(node, placeholder);
         placeholder.remove();
         wrapper.remove();
+        fixStyle.remove();
         node.className = prevClass;
         node.setAttribute('style', prevStyle);
         hidden.forEach(([e, d]) => { e.style.display = d; });
@@ -1649,7 +1677,7 @@ async function exportPDF(fmt = 'portrait') {
         // ---------- หน้า 2: รูปภาพทั้งหมด (ถ้ามี) ----------
         let galCanvas = null;
         if (withGallery) {
-            buildGallery();
+            buildGallery(isPNG ? 'png' : 'pdf');
             const gal = document.getElementById('photo-gallery');
             gal.style.display = 'block';
             galCanvas = await _captureNode(gal, CAP_W);
