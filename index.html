@@ -233,13 +233,23 @@
         </div>
         <div>
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">🕐 เวลาเริ่ม Breakdown</label>
-            <input type="datetime-local" id="bd-start" onchange="calcDowntime()"
-                   class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+            <div class="flex gap-2">
+                <input type="date" id="bd-start-date" onchange="calcDowntime()"
+                       class="flex-1 min-w-0 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+                <input type="text" id="bd-start-time" inputmode="numeric" maxlength="5" placeholder="00:00"
+                       oninput="fmtTimeInput(this)" onchange="normTime(this);calcDowntime()"
+                       class="w-[4.5rem] text-center bg-white border border-gray-300 rounded-lg px-2 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors text-gray-800">
+            </div>
         </div>
         <div>
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">🕐 เวลาเสร็จสิ้น</label>
-            <input type="datetime-local" id="bd-end" onchange="calcDowntime()"
-                   class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+            <div class="flex gap-2">
+                <input type="date" id="bd-end-date" onchange="calcDowntime()"
+                       class="flex-1 min-w-0 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+                <input type="text" id="bd-end-time" inputmode="numeric" maxlength="5" placeholder="00:00"
+                       oninput="fmtTimeInput(this)" onchange="normTime(this);calcDowntime()"
+                       class="w-[4.5rem] text-center bg-white border border-gray-300 rounded-lg px-2 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors text-gray-800">
+            </div>
         </div>
         <div>
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">⏱️ Downtime รวม</label>
@@ -320,7 +330,7 @@
             </label>
             <button type="button" onclick="addRootWhy()"
                     class="no-print border border-blue-300 text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center shadow-sm" style="white-space:nowrap">
-                <span class="mr-1 text-lg leading-none">+</span> เพิ่มปัญหาหลัก (Why 1 ใหม่)
+                <span class="mr-1 text-lg leading-none">+</span> เพิ่มปัญหาหลัก (Why ใหม่)
             </button>
         </div>
         <div id="why-tree" class="space-y-1"></div>
@@ -763,9 +773,39 @@ function updateStatus(sel) {
 // ============================================================
 // DOWNTIME CALCULATOR
 // ============================================================
+// ---- เวลาแบบ 24 ชม. (date + HH:MM) ----
+function fmtTimeInput(el) {                       // ขณะพิมพ์: ใส่ : อัตโนมัติ
+    let v = el.value.replace(/[^0-9]/g, '').slice(0, 4);
+    if (v.length >= 3) v = v.slice(0, 2) + ':' + v.slice(2);
+    el.value = v;
+}
+function normTime(el) {                           // ออกจากช่อง: ปรับเป็น HH:MM (00-23:00-59)
+    let v = el.value.replace(/[^0-9]/g, '');
+    if (!v) { el.value = ''; return; }
+    v = v.padStart(4, '0').slice(0, 4);
+    const hh = Math.min(23, parseInt(v.slice(0, 2), 10));
+    const mm = Math.min(59, parseInt(v.slice(2), 10));
+    el.value = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+}
+function getDT(prefix) {                          // รวม date + time → ISO
+    const d = document.getElementById(prefix + '-date').value;
+    const t = document.getElementById(prefix + '-time').value;
+    if (!d || !/^\d{2}:\d{2}$/.test(t)) return '';
+    return d + 'T' + t;
+}
+function setDT(prefix, iso) {                      // แยก ISO → date + time
+    const dEl = document.getElementById(prefix + '-date');
+    const tEl = document.getElementById(prefix + '-time');
+    if (!dEl || !tEl) return;
+    if (!iso) { dEl.value = ''; tEl.value = ''; return; }
+    const [d, t] = String(iso).split('T');
+    dEl.value = d || '';
+    tEl.value = (t || '').slice(0, 5);
+}
+
 function calcDowntime() {
-    const s = document.getElementById('bd-start').value;
-    const e = document.getElementById('bd-end').value;
+    const s = getDT('bd-start');
+    const e = getDT('bd-end');
     const d = document.getElementById('downtime-display');
     if (!s || !e) { d.textContent = '— ชม. — นาที'; return; }
     const diff = new Date(e) - new Date(s);
@@ -1069,8 +1109,8 @@ function collectFormData() {
     const statusSel = document.querySelector('#status-container select');
     const statusMap = { done:'ดำเนินการเสร็จสิ้น', wip:'กำลังดำเนินการ', wait:'รออะไหล่' };
 
-    const bdStart = document.getElementById('bd-start').value;
-    const bdEnd   = document.getElementById('bd-end').value;
+    const bdStart = getDT('bd-start');
+    const bdEnd   = getDT('bd-end');
     const downtimeMin = (bdStart && bdEnd)
         ? Math.max(0, Math.floor((new Date(bdEnd) - new Date(bdStart)) / 60000))
         : 0;
@@ -1198,8 +1238,8 @@ function openEditMode(item) {
     set('machine-name',   item.machineName);
     set('inp-machine-id', item.machineId);
     set('inp-line',       item.line);
-    set('bd-start',       item.bdStart);
-    set('bd-end',         item.bdEnd);
+    setDT('bd-start',     item.bdStart);
+    setDT('bd-end',       item.bdEnd);
     set('inp-problem',    item.problem);
     set('inp-corrective', item.corrective);
     set('inp-preventive', item.preventive);
