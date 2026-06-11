@@ -380,14 +380,14 @@
         <p class="text-orange-500 text-xs font-bold tracking-widest uppercase mb-1">● BREAKDOWN REPORT — รูปภาพประกอบ</p>
         <h1 id="gallery-title" class="text-white text-2xl md:text-3xl font-bold">ชื่อเครื่องจักร...</h1>
     </div>
-    <div class="p-8 grid grid-cols-2 gap-6">
-        <div class="border-2 border-dashed border-red-300 rounded-xl bg-red-50/40 p-4">
-            <div class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md inline-block mb-4" style="white-space:nowrap">ก่อนแก้ไข</div>
-            <div id="gallery-before" class="grid grid-cols-2 gap-3"></div>
+    <div class="p-8 space-y-6">
+        <div class="border-2 border-dashed border-red-300 rounded-xl bg-red-50/40 p-5">
+            <div class="bg-red-600 text-white text-sm font-bold px-4 py-1.5 rounded shadow-md inline-block mb-4" style="white-space:nowrap">ก่อนแก้ไข</div>
+            <div id="gallery-before" class="grid grid-cols-2 gap-4"></div>
         </div>
-        <div class="border-2 border-dashed border-green-300 rounded-xl bg-green-50/40 p-4">
-            <div class="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md inline-block mb-4" style="white-space:nowrap">หลังแก้ไข</div>
-            <div id="gallery-after" class="grid grid-cols-2 gap-3"></div>
+        <div class="border-2 border-dashed border-green-300 rounded-xl bg-green-50/40 p-5">
+            <div class="bg-green-600 text-white text-sm font-bold px-4 py-1.5 rounded shadow-md inline-block mb-4" style="white-space:nowrap">หลังแก้ไข</div>
+            <div id="gallery-after" class="grid grid-cols-2 gap-4"></div>
         </div>
     </div>
 </div>
@@ -1664,20 +1664,67 @@ async function exportPDF(fmt = 'portrait') {
                 _download(galCanvas.toDataURL('image/png'), `BD_${name}_รูปภาพ.png`);
             }
         } else {
-            // ===== PDF — custom page ต่อหน้า เต็มเนื้อหา =====
+            // ===== PDF — A4 มาตรฐาน (ทุก viewer แสดงเหมือนกัน) =====
             const { jsPDF } = window.jspdf;
-            const M  = 18, pW = 595;
-            const dims = (c) => { const dW = pW - M * 2; const dH = dW / (c.width / c.height); return { dW, dH, pH: dH + M * 2 }; };
+            const M = 18;
+            const pdf = new jsPDF({ unit:'pt', format:'a4', orientation:'portrait' });
+            const pageW = pdf.internal.pageSize.getWidth();   // 595
+            const pageH = pdf.internal.pageSize.getHeight();  // 842
+            const availW = pageW - M * 2;
+            const availH = pageH - M * 2;
+            let firstPage = true;
 
-            const d1  = dims(mainCanvas);
-            const pdf = new jsPDF({ unit:'pt', format:[pW, d1.pH], orientation:'portrait' });
-            pdf.addImage(mainCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', M, M, d1.dW, d1.dH);
+            // ฟอร์ม → ย่อให้พอดี 1 หน้า A4 (เต็มความกว้าง ชิดบน)
+            const addFitOnePage = (canvas) => {
+                if (!firstPage) pdf.addPage('a4', 'portrait');
+                firstPage = false;
+                let dW = availW, dH = dW / (canvas.width / canvas.height);
+                if (dH > availH) { dH = availH; dW = dH * (canvas.width / canvas.height); }
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', (pageW - dW) / 2, M, dW, dH);
+            };
 
-            if (galCanvas) {
-                const d2 = dims(galCanvas);
-                pdf.addPage([pW, d2.pH], 'portrait');
-                pdf.addImage(galCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', M, M, d2.dW, d2.dH);
-            }
+            // หาเส้นตัดที่เป็น "ช่องว่างระหว่างแถวรูป" (ไม่ตัดผ่ากลางรูป)
+            const findCleanCut = (canvas, idealY, maxUp) => {
+                const W   = canvas.width;
+                const top = Math.max(0, idealY - maxUp);
+                if (idealY - top < 2) return idealY;
+                let band;
+                try { band = canvas.getContext('2d').getImageData(0, top, W, idealY - top).data; }
+                catch (_) { return idealY; }
+                const h = idealY - top;
+                for (let ry = h - 1; ry >= 0; ry--) {        // ไล่ขึ้นจาก idealY
+                    let light = true;
+                    for (let x = 0; x < W; x += 24) {        // sample แนวนอน
+                        const i = (ry * W + x) * 4;
+                        if ((band[i] + band[i + 1] + band[i + 2]) / 3 < 225) { light = false; break; }
+                    }
+                    if (light) return top + ry;              // เจอแถวสว่าง = ช่องว่าง
+                }
+                return idealY;
+            };
+
+            // รูปภาพ (ยาว) → slice เต็มหลายหน้า A4 (รูปใหญ่ ไม่ตัดกลางรูป)
+            const addSliced = (canvas) => {
+                const pxPerPt  = canvas.width / availW;
+                const sliceHpx = Math.floor(availH * pxPerPt);
+                let sy = 0;
+                while (sy < canvas.height - 1) {
+                    let endY = Math.min(sy + sliceHpx, canvas.height);
+                    if (endY < canvas.height)
+                        endY = findCleanCut(canvas, endY, Math.floor(sliceHpx * 0.3));
+                    const sh = endY - sy;
+                    if (!firstPage) pdf.addPage('a4', 'portrait');
+                    firstPage = false;
+                    const tmp = document.createElement('canvas');
+                    tmp.width = canvas.width; tmp.height = sh;
+                    tmp.getContext('2d').drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+                    pdf.addImage(tmp.toDataURL('image/jpeg', 0.95), 'JPEG', M, M, availW, sh / pxPerPt);
+                    sy = endY;
+                }
+            };
+
+            addFitOnePage(mainCanvas);
+            if (galCanvas) addSliced(galCanvas);
             _download(pdf.output('datauristring'), `BD_${name}.pdf`);
         }
     } catch (err) {
