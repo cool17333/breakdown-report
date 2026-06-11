@@ -1652,27 +1652,41 @@ async function _captureNode(node, capW) {
         const d = e.style.display; e.style.display = 'none'; return [e, d];
     });
 
-    // แก้ html2canvas คลิปสระบน/วรรณยุกต์ไทย → เพิ่ม line-height + padding สมดุล
-    // (ไม่ใช้ min-height/line-height แรงเกิน เพราะทำให้ข้อความเลื่อนลงเหมือนกด enter)
-    const fixStyle = document.createElement('style');
-    fixStyle.textContent = `
-        .capture-fix input, .capture-fix textarea, .capture-fix select {
-            line-height: 1.6 !important;
-            padding-top: 6px !important;
-            padding-bottom: 6px !important;
-        }`;
-    document.head.appendChild(fixStyle);
-
     const wrapper = document.createElement('div');
     wrapper.style.cssText =
         `position:fixed;top:0;left:0;z-index:2147483647;background:#ffffff;width:${capW}px;padding:0;margin:0`;
     wrapper.appendChild(node);
     document.body.appendChild(wrapper);
 
+    // html2canvas วาดข้อความใน input ตำแหน่งเพี้ยน (เลื่อนลง/สระถูกตัด)
+    // → สลับ input/textarea/select เป็น <div> ข้อความธรรมดาชั่วคราว แล้ววาด div แทน
+    const swapped = [];
+    node.querySelectorAll('input:not([type=file]), textarea, select').forEach(el => {
+        const isSelect   = el.tagName === 'SELECT';
+        const isTextarea = el.tagName === 'TEXTAREA';
+        const val = isSelect ? (el.options[el.selectedIndex]?.text || '') : el.value;
+        const cs  = getComputedStyle(el);
+        const div = document.createElement('div');
+        div.style.cssText =
+            `box-sizing:border-box;width:${el.offsetWidth}px;min-height:${el.offsetHeight}px;` +
+            `padding:${cs.padding};border:${cs.borderWidth} ${cs.borderStyle} ${cs.borderColor};` +
+            `border-radius:${cs.borderRadius};background:${cs.backgroundColor};` +
+            `font-family:${cs.fontFamily};font-size:${cs.fontSize};font-weight:${cs.fontWeight};` +
+            `color:${val ? cs.color : '#9ca3af'};text-align:${cs.textAlign};` +
+            `line-height:1.8;overflow:visible;` +
+            (isTextarea ? 'white-space:pre-wrap;word-break:break-word;'
+                        : 'display:flex;align-items:center;white-space:nowrap;');
+        div.textContent = val || el.placeholder || '';
+        el.parentNode.insertBefore(div, el);
+        const prevDisp = el.style.display;
+        el.style.display = 'none';
+        swapped.push([el, div, prevDisp]);
+    });
+
     try {
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         const fullH = wrapper.scrollHeight;
-        // normal mode (foreignObjectRendering:false): ภาษาไทยถูกต้อง + ค่า input แสดงครบ
+        // normal mode (foreignObjectRendering:false): ภาษาไทยถูกต้อง
         return await html2canvas(wrapper, {
             scale: 2, useCORS: true, backgroundColor: '#ffffff',
             foreignObjectRendering: false, logging: false,
@@ -1680,10 +1694,10 @@ async function _captureNode(node, capW) {
             scrollX: 0, scrollY: 0, x: 0, y: 0,
         });
     } finally {
+        swapped.forEach(([el, div, d]) => { div.remove(); el.style.display = d; });
         parent.insertBefore(node, placeholder);
         placeholder.remove();
         wrapper.remove();
-        fixStyle.remove();
         node.className = prevClass;
         node.setAttribute('style', prevStyle);
         hidden.forEach(([e, d]) => { e.style.display = d; });
