@@ -33,6 +33,16 @@
         #report-content label,
         #report-content .absolute.rounded.shadow-md { white-space: nowrap; }
 
+        /* ตอน export (capture-fix): กล่องรูปยืดเต็มคอลัมน์ (ขอบบน=ปัญหาที่พบ, ขอบล่าง=อุปกรณ์)
+           + รูป cover แสดงสัดส่วนจริง ไม่ถูก crop */
+        #report-content.capture-fix #photo-box-before,
+        #report-content.capture-fix #photo-box-after { flex: 1 1 auto; }
+        #report-content.capture-fix #preview-before,
+        #report-content.capture-fix #preview-after {
+            object-fit: contain !important;
+            background: #ffffff;
+        }
+
         @media print {
             .no-print { display:none !important; }
             body { background:white; }
@@ -295,7 +305,7 @@
         <div class="grid grid-cols-2 gap-4">
             <!-- BEFORE -->
             <div class="flex flex-col gap-2">
-                <div class="relative border-2 border-dashed border-red-300 hover:border-red-500 rounded-xl bg-red-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors" style="min-height:13rem;">
+                <div id="photo-box-before" class="relative border-2 border-dashed border-red-300 hover:border-red-500 rounded-xl bg-red-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors" style="min-height:13rem;">
                     <div class="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md z-10">ก่อนแก้ไข</div>
                     <input type="file" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="addImages(event,'before')">
                     <img id="preview-before" class="absolute inset-0 w-full h-full object-cover hidden">
@@ -308,7 +318,7 @@
             </div>
             <!-- AFTER -->
             <div class="flex flex-col gap-2">
-                <div class="relative border-2 border-dashed border-green-300 hover:border-green-500 rounded-xl bg-green-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors" style="min-height:13rem;">
+                <div id="photo-box-after" class="relative border-2 border-dashed border-green-300 hover:border-green-500 rounded-xl bg-green-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors" style="min-height:13rem;">
                     <div class="absolute top-3 left-3 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md z-10">หลังแก้ไข</div>
                     <input type="file" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="addImages(event,'after')">
                     <img id="preview-after" class="absolute inset-0 w-full h-full object-cover hidden">
@@ -1087,9 +1097,9 @@ function buildGallery(mode = 'pdf') {
         list.forEach(src => {
             const d = document.createElement('div');
             d.className = 'rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm';
-            // padding-bottom = อัตราส่วนคงที่ (html2canvas รองรับ ไม่เหมือน aspect-ratio)
-            d.style.cssText = 'position:relative;width:100%;padding-bottom:70%';
-            d.innerHTML = `<img src="${src}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">`;
+            d.style.cssText = 'align-self:start';
+            // width:100% + height:auto → สัดส่วนเท่ารูปต้นฉบับ (ความสูงถูกจำกัดด้วยความกว้างคอลัมน์)
+            d.innerHTML = `<img src="${src}" style="display:block;width:100%;height:auto">`;
             c.appendChild(d);
         });
     };
@@ -1667,13 +1677,15 @@ async function _captureNode(node, capW) {
         const val = isSelect ? (el.options[el.selectedIndex]?.text || '') : el.value;
         const cs  = getComputedStyle(el);
         const div = document.createElement('div');
+        // ขนาดเท่า element จริงเป๊ะ → กรอบใน export ตรงกับ UI
         div.style.cssText =
-            `box-sizing:border-box;width:${el.offsetWidth}px;min-height:${el.offsetHeight}px;` +
+            `box-sizing:border-box;width:${el.offsetWidth}px;` +
+            (isTextarea ? `min-height:${el.offsetHeight}px;` : `height:${el.offsetHeight}px;`) +
             `padding:${cs.padding};border:${cs.borderWidth} ${cs.borderStyle} ${cs.borderColor};` +
             `border-radius:${cs.borderRadius};background:${cs.backgroundColor};` +
             `font-family:${cs.fontFamily};font-size:${cs.fontSize};font-weight:${cs.fontWeight};` +
             `color:${val ? cs.color : '#9ca3af'};text-align:${cs.textAlign};` +
-            `line-height:1.8;overflow:visible;` +
+            `line-height:${cs.lineHeight};overflow:visible;` +
             (isTextarea ? 'white-space:pre-wrap;word-break:break-word;'
                         : 'display:flex;align-items:center;white-space:nowrap;');
         div.textContent = val || el.placeholder || '';
@@ -1684,7 +1696,13 @@ async function _captureNode(node, capW) {
     });
 
     try {
-        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        // รอ layout settle — ใช้ setTimeout ควบคู่ เพราะ rAF ไม่ fire ถ้าแท็บถูกซ่อน
+        await new Promise(r => {
+            let done = false;
+            const go = () => { if (!done) { done = true; r(); } };
+            requestAnimationFrame(() => requestAnimationFrame(go));
+            setTimeout(go, 250);
+        });
         const fullH = wrapper.scrollHeight;
         // normal mode (foreignObjectRendering:false): ภาษาไทยถูกต้อง
         return await html2canvas(wrapper, {
