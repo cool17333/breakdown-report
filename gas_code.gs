@@ -134,12 +134,13 @@ function doGet(e) {
     const area    = e.parameter.area    || '';
     const status  = e.parameter.status  || '';
     const month   = e.parameter.month   || ''; // YYYY-MM
+    const machineId = e.parameter.machineId || '';
 
     if (action === 'getData') {
       return doGetSummary(year, factory, area);
     }
     if (action === 'getAll') {
-      return doGetAll(factory, area, status, month);
+      return doGetAll(factory, area, status, month, machineId);
     }
     return jsonOut({ success: false, error: 'Unknown action' });
 
@@ -179,7 +180,8 @@ function doGetSummary(year, factory, area) {
 }
 
 // ดึงข้อมูลทั้งหมด พร้อม rowIndex (สำหรับ Records tab + Edit)
-function doGetAll(factory, area, status, month) {
+function doGetAll(factory, area, status, month, machineId) {
+  const mid = (machineId || '').toLowerCase();
   const ss     = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheets = ss.getSheets();
   const rows   = [];
@@ -199,6 +201,7 @@ function doGetAll(factory, area, status, month) {
       if (!r[0]) continue;
       if (area   && r[3] !== area)   continue;
       if (status && r[6] !== status) continue;
+      if (mid    && String(r[4]).toLowerCase().indexOf(mid) < 0) continue; // รหัสเครื่องจักร (บางส่วน)
 
       const whys = [r[13]||'', r[14]||'', r[15]||'', r[16]||'', r[17]||''].filter(Boolean);
       rows.push({
