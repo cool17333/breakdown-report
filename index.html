@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ใบรายงาน Breakdown เครื่องจักร</title>
+    <title>BREAKDOWN REPORT SYSTEM - CPRAM Chonburi</title>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -188,7 +188,7 @@
 <div id="panel-home" class="tab-panel active p-4 md:p-8">
 <div class="max-w-4xl mx-auto">
     <div class="text-center mb-8 mt-4 md:mt-8">
-        <p class="text-orange-500 text-xs font-bold uppercase tracking-widest mb-1">🔴 Breakdown Report System</p>
+        <p class="text-orange-500 text-xs md:text-sm font-bold uppercase tracking-widest mb-1">🔴 BREAKDOWN REPORT SYSTEM - CPRAM Chonburi</p>
         <h1 class="text-2xl md:text-3xl font-bold text-gray-900">เลือกเมนูที่ต้องการ</h1>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -224,7 +224,7 @@
     <!-- HEADER -->
     <div class="bg-[#18181b] px-6 md:px-8 py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-            <p class="text-orange-500 text-xs font-bold uppercase tracking-widest mb-1">🔴 Breakdown Report — Machine</p>
+            <p class="text-orange-500 text-xs font-bold uppercase tracking-widest mb-1">🔴 Breakdown Report — Machine · CPRAM CHB</p>
             <input type="text" id="machine-name"
                    class="block text-2xl md:text-3xl font-bold text-white bg-transparent border-b-2 border-transparent hover:border-gray-600 focus:border-orange-500 outline-none transition-colors p-1 w-72 md:w-[36rem]"
                    placeholder="ชื่อเครื่องจักร...">
@@ -490,6 +490,12 @@
                 </select>
             </div>
             <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">เลข Tracking</label>
+                <input type="text" id="rec-tracking" oninput="applyRecordFilter()"
+                       onkeydown="if(event.key==='Enter')loadRecords()" placeholder="BD-... / บางส่วน"
+                       class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 w-40">
+            </div>
+            <div>
                 <label class="text-xs font-bold text-gray-500 block mb-1">รหัสเครื่องจักร</label>
                 <input type="text" id="rec-machine-id" oninput="applyRecordFilter()"
                        onkeydown="if(event.key==='Enter')loadRecords()" placeholder="พิมพ์รหัส / บางส่วน..."
@@ -697,7 +703,8 @@
 // ============================================================
 // SETTINGS — Google Apps Script
 // ============================================================
-let GAS_URL = localStorage.getItem('gas_url') || '';
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwgIYTDjLQbz4vDwKETE8Ve4iO68Q4_4RpRgj7m8vAcwHzrZX5f5CqjMm5DImrsr-Uf/exec';
+let GAS_URL = localStorage.getItem('gas_url') || DEFAULT_GAS_URL;
 
 function openSettings() {
     document.getElementById('gas-url-input').value = GAS_URL;
@@ -1535,9 +1542,11 @@ async function loadRecords() {
 // กรองรายการที่โหลดมาแล้วด้วยรหัสเครื่องจักร + สถานะ — ทำงานทันทีฝั่ง browser
 function applyRecordFilter() {
     const q   = (document.getElementById('rec-machine-id')?.value || '').trim().toLowerCase();
+    const tk  = (document.getElementById('rec-tracking')?.value || '').trim().toLowerCase();
     const st  = document.getElementById('rec-status')?.value || '';
     const rows = _lastRecords.filter(r =>
         (!q  || String(r.machineId || '').toLowerCase().includes(q)) &&
+        (!tk || String(r.tracking  || '').toLowerCase().includes(tk)) &&
         (!st || r.status === st)
     );
 
@@ -1842,7 +1851,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v7';
+const EXPORT_VER = 'v8';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
