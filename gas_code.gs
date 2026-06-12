@@ -33,6 +33,8 @@ const HEADERS = [
   'อายุจริงตอนเสีย',
   'หมายเหตุอายุอะไหล่',
   'อะไหล่ที่ใช้',
+  'เลข Tracking',         // index 24
+  'ผู้ดำเนินการล่าสุด',   // index 25
 ];
 
 // ============================================================
@@ -53,6 +55,7 @@ function doPost(e) {
       const row = buildRow(data, whys, partsStr, /*keepTimestamp=*/true);
       sheet.getRange(data.rowIndex, 1, 1, row.length).setValues([row]);
 
+      writeLog(ss, data.tracking, 'แก้ไข → ' + (data.status || ''), data.byName, data.status);
       return jsonOut({ success: true, action: 'updated' });
     }
 
@@ -77,11 +80,15 @@ function doPost(e) {
       sheet.setColumnWidth(13, 200);
     }
 
+    // เลข Tracking — ใช้ของ client ถ้ามี ไม่งั้นออกให้ใหม่
+    data.tracking = data.tracking || ('BD-' + Utilities.formatDate(now, 'Asia/Bangkok', 'yyyyMMdd-HHmmss'));
+
     const whys    = data.whys || [];
     const partsStr = buildPartsStr(data.parts);
     sheet.appendRow(buildRow(data, whys, partsStr, /*keepTimestamp=*/false, now));
 
-    return jsonOut({ success: true, sheet: sheetName });
+    writeLog(ss, data.tracking, 'แจ้ง Breakdown (สร้างใหม่)', data.byName, data.status);
+    return jsonOut({ success: true, sheet: sheetName, tracking: data.tracking });
 
   } catch (err) {
     return jsonOut({ success: false, error: err.toString() });
@@ -113,7 +120,25 @@ function buildRow(data, whys, partsStr, keepTimestamp, now) {
     data.actualLife    || '',
     data.lifeNote      || '',
     partsStr,
+    data.tracking      || '',
+    data.byName        || '',
   ];
+}
+
+// เก็บ log ทุกการกระทำลงชีต "_Log" (ใคร/เมื่อไหร่/ทำอะไร)
+function writeLog(ss, tracking, action, byName, status) {
+  let log = ss.getSheetByName('_Log');
+  if (!log) {
+    log = ss.insertSheet('_Log');
+    const h = log.getRange(1, 1, 1, 5);
+    h.setValues([['เวลา', 'เลข Tracking', 'การกระทำ', 'ผู้ดำเนินการ', 'สถานะ']]);
+    h.setBackground('#18181b').setFontColor('#ffffff').setFontWeight('bold');
+    log.setFrozenRows(1);
+  }
+  log.appendRow([
+    Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm:ss'),
+    tracking || '', action || '', byName || '', status || '',
+  ]);
 }
 
 function buildPartsStr(parts) {
@@ -227,6 +252,8 @@ function doGetAll(factory, area, status, month, machineId) {
         actualLife:  r[21] || '',
         lifeNote:    r[22] || '',
         parts:       r[23] || '',
+        tracking:    r[24] || '',
+        byName:      r[25] || '',
       });
     }
   });

@@ -168,7 +168,12 @@
         <h2 id="confirm-title" class="text-base font-bold mb-3 flex items-center gap-2">
             📤 ยืนยันการแจ้ง Breakdown
         </h2>
-        <div id="confirm-summary" class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-2 mb-5"></div>
+        <div id="confirm-summary" class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-2 mb-4"></div>
+        <div class="mb-5">
+            <label id="confirm-name-label" class="text-xs font-bold text-gray-700 block mb-1">👤 ยืนยันชื่อผู้ดำเนินการ <span class="text-red-500">*</span></label>
+            <input id="confirm-name" type="text" placeholder="ระบุชื่อผู้คีย์ข้อมูล..." autocomplete="off"
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500 transition-colors">
+        </div>
         <div class="flex gap-3 justify-end">
             <button onclick="closeConfirm()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ยกเลิก</button>
             <button onclick="confirmAddData()" id="confirm-ok-btn"
@@ -223,6 +228,9 @@
             <input type="text" id="machine-name"
                    class="block text-2xl md:text-3xl font-bold text-white bg-transparent border-b-2 border-transparent hover:border-gray-600 focus:border-orange-500 outline-none transition-colors p-1 w-72 md:w-[36rem]"
                    placeholder="ชื่อเครื่องจักร...">
+            <p id="tracking-display" class="hidden text-gray-300 text-xs font-bold mt-1.5 ml-1">
+                🔖 เลข Tracking: <span id="tracking-no" class="text-orange-300 font-mono tracking-wider"></span>
+            </p>
         </div>
         <div id="status-container"
              class="flex items-center gap-3 border-2 border-red-400 bg-red-900/30 rounded-full px-5 py-2.5 self-start md:self-auto cursor-pointer">
@@ -706,6 +714,23 @@ function saveSettings() {
 }
 
 // ============================================================
+// TRACKING NUMBER (เลข Tracking Breakdown)
+// ============================================================
+let currentTracking = '';
+
+// รูปแบบ BD-YYYYMMDD-HHMMSS (เลขวินาทีกันชนกัน — พอสำหรับทีมเดียว)
+function genTracking() {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return `BD-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function showTracking() {
+    const el = document.getElementById('tracking-display');
+    document.getElementById('tracking-no').textContent = currentTracking || '';
+    el.classList.toggle('hidden', !currentTracking);
+}
+
+// ============================================================
 // PAGE NAVIGATION (Home → เลือกเมนู)
 // ============================================================
 const PAGE_TITLE = {
@@ -764,6 +789,8 @@ function resetForm() {
     resetImages();
     calcDowntime();
 
+    currentTracking = genTracking();   // ใบแจ้งใหม่ → เลข Tracking ใหม่
+    showTracking();
     setStatusLocked(true);   // ใบแจ้งใหม่ต้องเป็น "แจ้ง Breakdown" เท่านั้น
 }
 
@@ -1255,6 +1282,7 @@ function collectFormData() {
 
     return {
         timestamp:   new Date().toISOString(),
+        tracking:    currentTracking,
         machineName: g('machine-name'),
         factory:     factory.options[factory.selectedIndex]?.text || '',
         area:        area.options[area.selectedIndex]?.text || '',
@@ -1298,9 +1326,15 @@ function showAddDataConfirm() {
     document.getElementById('confirm-title').textContent = isEdit ? '✏️ ยืนยันการแก้ไขข้อมูล' : '📤 ยืนยันการแจ้ง Breakdown';
     document.getElementById('confirm-btn-label').textContent = isEdit ? 'ยืนยันการแก้ไข' : 'ยืนยันการแจ้ง';
 
+    // ชื่อผู้ทำ — label ตามขั้น + เติมชื่อล่าสุดที่เคยกรอก
+    document.getElementById('confirm-name-label').innerHTML =
+        (isEdit ? '👤 ยืนยันชื่อผู้ดำเนินการ' : '👤 ยืนยันชื่อผู้แจ้ง') + ' <span class="text-red-500">*</span>';
+    document.getElementById('confirm-name').value = localStorage.getItem('last_by_name') || '';
+
     document.getElementById('confirm-summary').innerHTML = `
         ${isEdit ? '<div class="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 font-bold">⚠️ กำลังแก้ไขรายการเดิม — ตรวจสอบสถานะให้ถูกต้องก่อนยืนยัน</div>' : ''}
         <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs items-center">
+            <span class="text-gray-500 font-bold">เลข Tracking</span>  <span class="font-mono font-bold text-orange-600">${currentTracking}</span>
             <span class="text-gray-500 font-bold">เครื่องจักร</span>   <span class="font-bold text-gray-900">${d.machineName}</span>
             <span class="text-gray-500 font-bold">โรงงาน</span>        <span>${d.factory}</span>
             <span class="text-gray-500 font-bold">พื้นที่</span>         <span>${d.area || '—'}</span>
@@ -1320,19 +1354,29 @@ function closeConfirm() {
 }
 
 async function confirmAddData() {
+    // ยืนยันชื่อผู้ทำทุกครั้งก่อนเข้าระบบ
+    const byName = document.getElementById('confirm-name').value.trim();
+    if (!byName) {
+        document.getElementById('confirm-name').focus();
+        showToast('⚠️ กรุณายืนยันชื่อผู้ดำเนินการก่อน', 'error');
+        return;
+    }
+    localStorage.setItem('last_by_name', byName);   // จำไว้เติมครั้งหน้า
+
     const btn = document.getElementById('confirm-ok-btn');
     btn.disabled = true;
     btn.innerHTML = '<span class="animate-spin">⏳</span> กำลังบันทึก...';
 
-    const data = collectFormData();
+    const isEdit = !!(editMode && editRowIndex);
+    const data = { ...collectFormData(), byName, action: isEdit ? 'update' : 'create' };
 
     try {
-        if (editMode && editRowIndex) {
+        if (isEdit) {
             // อัปเดตแถวเดิม
             await fetch(GAS_URL, {
                 method: 'POST', mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'update', rowIndex: editRowIndex, sheetName: editSheetName, ...data }),
+                body: JSON.stringify({ ...data, action: 'update', rowIndex: editRowIndex, sheetName: editSheetName }),
             });
             closeConfirm();
             cancelEdit();
@@ -1345,8 +1389,7 @@ async function confirmAddData() {
                 body: JSON.stringify(data),
             });
             closeConfirm();
-            const month = new Date().toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
-            showToast(`✅ บันทึกเข้า Google Sheet สำเร็จ → ${data.factory} (${month})`, 'success');
+            showToast(`✅ แจ้ง Breakdown สำเร็จ → ${currentTracking}`, 'success');
         }
     } catch (err) {
         showToast('❌ เกิดข้อผิดพลาด: ' + err.message, 'error');
@@ -1368,6 +1411,8 @@ function openEditMode(item) {
     editMode      = true;
     editRowIndex  = item.rowIndex;
     editSheetName = item.sheetName;
+    currentTracking = item.tracking || genTracking();   // เก็บเลขเดิม (ของเก่าไม่มี → ออกใหม่)
+    showTracking();
 
     // fill form
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -1523,7 +1568,7 @@ function renderRecordsTable(rows) {
         const badge= STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600';
         const isPending = r.status !== 'ดำเนินการเสร็จสิ้น';
         return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-            <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${date}</td>
+            <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${date}${r.tracking?`<br><span class="text-gray-400 font-mono text-[10px]">${r.tracking}</span>`:''}</td>
             <td class="px-4 py-3 font-bold text-gray-900 text-sm">${r.machineName||'—'}${r.machineId?`<br><span class="text-gray-400 font-normal text-xs">${r.machineId}</span>`:''}</td>
             <td class="px-4 py-3 text-xs text-gray-600">${r.factory||''}<br><span class="text-gray-400">${r.area||''}</span></td>
             <td class="px-4 py-3 text-center">
@@ -1797,7 +1842,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v6';
+const EXPORT_VER = 'v7';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
