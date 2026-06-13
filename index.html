@@ -94,7 +94,10 @@
         <input id="gas-url-input" type="url"
                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                placeholder="https://script.google.com/macros/s/.../exec">
-        <p id="url-lock-hint" class="text-xs text-amber-600 mt-1">🔒 ต้องเข้าสู่ระบบเป็น Admin เพื่อแก้ไข URL</p>
+        <div class="flex items-center justify-between mt-1">
+            <p id="url-lock-hint" class="text-xs text-amber-600">🔒 ต้องเข้าสู่ระบบเป็น Admin เพื่อแก้ไข URL</p>
+            <button onclick="resetGasUrl()" class="text-xs font-bold text-gray-400 hover:text-gray-700 underline whitespace-nowrap">↺ คืนค่าเริ่มต้น</button>
+        </div>
 
         <!-- LOGIN / ROLE -->
         <div class="mt-5 pt-5 border-t border-gray-200">
@@ -764,7 +767,24 @@
 // SETTINGS — Google Apps Script
 // ============================================================
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxrGn-BZiRJd13FMivyx1X74naNTNgziQ5AGxIeZnTlC2c0zkJKDZRiqhAir4z7nNBj/exec';
+// URL เก่าที่เลิกใช้ — ถ้าเครื่องไหนเคยบันทึกไว้ จะล้างทิ้งอัตโนมัติให้ใช้ default ใหม่
+const OLD_GAS_URLS = [
+    'https://script.google.com/macros/s/AKfycbwgIYTDjLQbz4vDwKETE8Ve4iO68Q4_4RpRgj7m8vAcwHzrZX5f5CqjMm5DImrsr-Uf/exec',
+];
+(function migrateGasUrl() {
+    const saved = localStorage.getItem('gas_url');
+    if (saved && OLD_GAS_URLS.includes(saved)) localStorage.removeItem('gas_url');
+})();
 let GAS_URL = localStorage.getItem('gas_url') || DEFAULT_GAS_URL;
+
+// คืนค่า URL เริ่มต้น (ทางหนีจากการล็อก — ไม่ต้องเป็น Admin)
+function resetGasUrl() {
+    localStorage.removeItem('gas_url');
+    GAS_URL = DEFAULT_GAS_URL;
+    const inp = document.getElementById('gas-url-input');
+    if (inp) inp.value = GAS_URL;
+    showToast('↺ คืนค่า URL เริ่มต้นแล้ว', 'success');
+}
 
 function openSettings() {
     document.getElementById('gas-url-input').value = GAS_URL;
@@ -2109,7 +2129,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v15';
+const EXPORT_VER = 'v16';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
