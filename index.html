@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { font-family: 'Prompt', sans-serif; background-color: #f3f4f6; color: #111827; }
         textarea { resize: none; overflow: hidden; line-height: 1.6; }
@@ -110,6 +111,19 @@
                 <button onclick="doLogin()" class="px-5 py-2 bg-gray-900 hover:bg-orange-500 text-white font-bold rounded-lg text-sm transition-colors whitespace-nowrap">เข้าสู่ระบบ</button>
             </div>
             <button id="logout-btn" onclick="doLogout()" class="hidden text-xs font-bold text-red-600 hover:text-red-800 underline mt-2">ออกจากระบบ</button>
+        </div>
+
+        <!-- MACHINE MASTER IMPORT (Admin) -->
+        <div id="machine-import-row" class="hidden mt-5 pt-5 border-t border-gray-200">
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">รายการเครื่องจักร (Master)</label>
+            <p class="text-xs text-gray-400 mb-2">อัปโหลด Excel/CSV → เขียนทับทั้งหมด · คอลัมน์: รหัส · ชื่อ · โรงงาน · พื้นที่ · ไลน์</p>
+            <div class="flex items-center gap-3">
+                <label class="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-orange-500 text-white font-bold rounded-lg text-sm cursor-pointer transition-colors">
+                    📋 เลือกไฟล์ Excel
+                    <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importMachinesFile(this)">
+                </label>
+                <span id="machine-count" class="text-xs text-gray-400"></span>
+            </div>
         </div>
 
         <div class="flex gap-3 justify-end mt-5">
@@ -922,7 +936,54 @@ function applyRole() {
     if (urlInput) urlInput.disabled = !isAdmin;
     document.getElementById('btn-save-url')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('url-lock-hint')?.classList.toggle('hidden', isAdmin);
+    document.getElementById('machine-import-row')?.classList.toggle('hidden', !isAdmin);   // นำเข้าเครื่องจักร = Admin
     if (_lastRecords.length) applyRecordFilter();   // re-render ปุ่มตาม role
+}
+
+// นำเข้ารายการเครื่องจักรจากไฟล์ Excel/CSV → เขียนทับแท็บ _Machines (Admin)
+async function importMachinesFile(input) {
+    const file = input.files[0]; if (!file) return;
+    if (userRole !== 'admin') { showToast('⚠️ ต้องเข้าสู่ระบบเป็น Admin', 'error'); input.value = ''; return; }
+    if (typeof XLSX === 'undefined') { showToast('❌ โหลดตัวอ่าน Excel ไม่สำเร็จ', 'error'); input.value = ''; return; }
+    try {
+        const wb   = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });   // array ของ array
+        if (!rows.length) { showToast('⚠️ ไฟล์ว่าง', 'error'); input.value = ''; return; }
+
+        // หา column จากหัวตาราง (ไม่เจอ → ใช้ตำแหน่ง A-E)
+        const head = rows[0].map(h => String(h).toLowerCase());
+        const col  = kw => head.findIndex(h => kw.some(k => h.includes(k)));
+        let cId = col(['รหัส','code','id']), cName = col(['ชื่อ','name']),
+            cFac = col(['โรงงาน','factory']), cArea = col(['พื้นที่','area']), cLine = col(['ไลน์','line','สาย']);
+        let start = 1;
+        if (cId < 0) { cId = 0; cName = 1; cFac = 2; cArea = 3; cLine = 4; start = 0; }
+
+        const machines = [];
+        for (let i = start; i < rows.length; i++) {
+            const r = rows[i], id = String(r[cId] || '').trim();
+            if (!id) continue;
+            machines.push({
+                id, name: String(r[cName] || '').trim(), factory: String(r[cFac] || '').trim(),
+                area: String(r[cArea] || '').trim(), line: cLine >= 0 ? String(r[cLine] || '').trim() : '',
+            });
+        }
+        if (!machines.length) { showToast('⚠️ ไม่พบข้อมูลเครื่องจักรในไฟล์', 'error'); input.value = ''; return; }
+        if (!confirm(`นำเข้า ${machines.length} เครื่องจักร?\n(จะเขียนทับรายการเดิมทั้งหมด)`)) { input.value = ''; return; }
+
+        const res  = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+            body: JSON.stringify({ action: 'setMachines', pw: sessionPw, machines }) });
+        const json = await res.json();
+        if (json && json.success) {
+            document.getElementById('machine-count').textContent = `✅ ${json.count} เครื่องจักร`;
+            showToast(`✅ นำเข้า ${json.count} เครื่องจักรสำเร็จ`, 'success');
+            machineList = []; loadMachines();
+        } else {
+            showToast('❌ นำเข้าไม่สำเร็จ: ' + (json && json.error || 'ไม่ทราบสาเหตุ'), 'error');
+        }
+    } catch (e) {
+        showToast('❌ อ่านไฟล์ไม่ได้: ' + e.message, 'error');
+    } finally { input.value = ''; }
 }
 
 // ลบเอกสาร (Admin) — server ตรวจรหัสซ้ำอีกชั้น
@@ -2319,7 +2380,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v19';
+const EXPORT_VER = 'v20';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
