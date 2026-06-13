@@ -1998,8 +1998,10 @@ function renderRecordsTable(rows) {
         const badge= STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600';
         const isPending = r.status !== 'ดำเนินการเสร็จสิ้น';
         const j = JSON.stringify(r).replace(/'/g,"&#39;");
+        const isAdmin   = (userRole === 'admin');
         const canEdit   = (userRole === 'engineer' || userRole === 'admin');
-        const canDelete = (userRole === 'admin');
+        const canDelete = isAdmin;
+        const isDone    = !isPending;   // ปิดงานแล้ว → export PDF ได้
         return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
             <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${date}${r.tracking?`<br><span class="text-gray-400 font-mono text-[10px]">${r.tracking}</span>`:''}</td>
             <td class="px-4 py-3 font-bold text-gray-900 text-sm">${r.machineName||'—'}${r.machineId?`<br><span class="text-gray-400 font-normal text-xs">${r.machineId}</span>`:''}</td>
@@ -2013,10 +2015,10 @@ function renderRecordsTable(rows) {
                 <div class="flex gap-1 justify-center flex-wrap">
                     ${(canEdit && isPending) ? `<button onclick='openEditMode(${j})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-700 transition-colors">✏️ แก้ไข</button>` : ''}
-                    <button onclick='openLog(${JSON.stringify(r.tracking||"")})'
-                        class="text-xs font-bold px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors">🕑 Log</button>
-                    <button onclick='exportRowPDF(${j})'
-                        class="text-xs font-bold px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">📄 PDF</button>
+                    ${isAdmin ? `<button onclick='openLog(${JSON.stringify(r.tracking||"")})'
+                        class="text-xs font-bold px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors">🕑 Log</button>` : ''}
+                    ${isDone ? `<button onclick='exportRowPDF(${j})'
+                        class="text-xs font-bold px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">📄 PDF</button>` : ''}
                     ${canDelete ? `<button onclick='deleteRecord(${j})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 transition-colors">🗑️ ลบ</button>` : ''}
                 </div>
@@ -2279,7 +2281,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v17';
+const EXPORT_VER = 'v18';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
