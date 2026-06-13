@@ -239,7 +239,7 @@
                 class="group bg-white rounded-2xl shadow-sm border border-gray-200 hover:border-red-400 hover:shadow-lg transition-all p-7 text-center transform hover:-translate-y-1">
             <div class="text-5xl mb-4">🚨</div>
             <p class="text-lg font-bold text-gray-900 mb-1">แจ้ง Breakdown</p>
-            <p class="text-xs text-gray-500 leading-relaxed">แจ้งเหตุเครื่องจักรเสีย — กรอกสั้นๆ อาการ + รูป</p>
+            <p class="text-xs text-gray-500 leading-relaxed">แจ้งเหตุเครื่องจักรเสีย</p>
             <span class="inline-block mt-4 text-xs font-bold text-white bg-red-500 group-hover:bg-red-600 px-4 py-1.5 rounded-full transition-colors">+ แจ้ง Breakdown</span>
         </button>
         <button onclick="goRecords()"
@@ -317,7 +317,8 @@
         </div>
         <div>
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">รหัสเครื่องจักร (Machine ID)</label>
-            <input id="inp-machine-id" type="text" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors" placeholder="Machine ID...">
+            <input id="inp-machine-id" type="text" list="machine-id-list" oninput="onMachineIdLookup()" autocomplete="off" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors" placeholder="พิมพ์/เลือกรหัส (อิงทะเบียนเครื่องจักร)">
+            <datalist id="machine-id-list"></datalist>
         </div>
         <div>
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">สาย / ตำแหน่ง (Line)</label>
@@ -545,14 +546,10 @@
 
         <div class="space-y-3 text-sm">
             <div>
-                <label class="text-xs font-bold text-gray-600 block mb-1">รหัสเครื่องจักร <span class="text-red-500">*</span></label>
-                <input list="machine-list" id="rm-machine-id" oninput="rmOnMachineId()" autocomplete="off"
-                       placeholder="พิมพ์/เลือกรหัส แล้วชื่อจะเด้งให้..." class="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-orange-500">
-                <datalist id="machine-list"></datalist>
-            </div>
-            <div>
                 <label class="text-xs font-bold text-gray-600 block mb-1">ชื่อเครื่องจักร <span class="text-red-500">*</span></label>
-                <input id="rm-machine" type="text" placeholder="อิงตามรหัส (แก้ได้ถ้าไม่มีในลิสต์)" class="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-orange-500">
+                <input list="machine-name-list" id="rm-machine" type="text" autocomplete="off" placeholder="ระบุชื่อเครื่องจักร..." class="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-orange-500">
+                <datalist id="machine-name-list"></datalist>
+                <p class="text-[11px] text-gray-400 mt-1">รหัสเครื่องจักรจะระบุตอนรับงาน/ปิดงาน (อิงทะเบียนเครื่องจักร)</p>
             </div>
             <div class="grid grid-cols-3 gap-3">
                 <div>
@@ -1132,36 +1129,31 @@ function closeTrackingModal() {
 // ============================================================
 let machineList = [];   // master เครื่องจักร (รหัส→ชื่อ) จากแท็บ _Machines
 
-// โหลด master เครื่องจักรจาก GAS → เติม datalist
+// โหลด master เครื่องจักรจาก GAS → เติม datalist (ชื่อ สำหรับ popup, รหัส สำหรับฟอร์มเต็ม)
 async function loadMachines() {
     if (!GAS_URL) return;
     try {
         const res  = await fetch(`${GAS_URL}?action=getMachines`);
         const json = await res.json();
         machineList = json.data || [];
-        document.getElementById('machine-list').innerHTML =
-            machineList.map(m => `<option value="${(m.id||'').replace(/"/g,'&quot;')}">${(m.name||'').replace(/"/g,'&quot;')}</option>`).join('');
+        const esc = s => String(s || '').replace(/"/g, '&quot;');
+        const idDl = document.getElementById('machine-id-list');
+        if (idDl) idDl.innerHTML = machineList.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+        const nameDl = document.getElementById('machine-name-list');
+        if (nameDl) nameDl.innerHTML = [...new Set(machineList.map(m => m.name).filter(Boolean))].map(n => `<option value="${esc(n)}"></option>`).join('');
     } catch (e) { /* เงียบ — กรอกเองได้ */ }
 }
 
-// เลือก/พิมพ์รหัส → autofill ชื่อ/โรงงาน/พื้นที่/ไลน์
-function rmOnMachineId() {
-    const id = document.getElementById('rm-machine-id').value.trim().toLowerCase();
+// ฟอร์มเต็ม (รับงาน/ปิดงาน): พิมพ์/เลือกรหัส → autofill ชื่อเครื่อง (อิงทะเบียน)
+function onMachineIdLookup() {
+    const id = document.getElementById('inp-machine-id').value.trim().toLowerCase();
     const m = machineList.find(x => String(x.id).toLowerCase() === id);
-    if (!m) return;   // ไม่เจอในลิสต์ → ปล่อยให้กรอกเอง
-    document.getElementById('rm-machine').value = m.name || '';
-    document.getElementById('rm-line').value    = m.line || '';
-    const fval = /2/.test(m.factory) ? '2' : /1/.test(m.factory) ? '1' : '';
-    if (fval) {
-        document.getElementById('rm-factory').value = fval;
-        rmUpdateArea();
-        const aSel = document.getElementById('rm-area');
-        [...aSel.options].forEach(o => { if (o.value === m.area) o.selected = true; });
-    }
+    if (!m) return;
+    const nameEl = document.getElementById('machine-name'); if (nameEl) nameEl.value = m.name || nameEl.value;
+    const lineEl = document.getElementById('inp-line');     if (lineEl && !lineEl.value) lineEl.value = m.line || '';
 }
 
 function openReportPopup() {
-    document.getElementById('rm-machine-id').value = '';
     document.getElementById('rm-factory').value = '';
     rmUpdateArea();
     ['rm-machine','rm-line','rm-date','rm-time','rm-problem'].forEach(id => document.getElementById(id).value = '');
@@ -1200,7 +1192,6 @@ async function submitReportPopup() {
     const fSel = document.getElementById('rm-factory');
     const factory = fSel.options[fSel.selectedIndex]?.text || '';
     const area    = document.getElementById('rm-area').value;
-    const machineId = document.getElementById('rm-machine-id').value.trim();
     const machine = document.getElementById('rm-machine').value.trim();
     const line    = document.getElementById('rm-line').value.trim();
     const date    = document.getElementById('rm-date').value;
@@ -1208,7 +1199,6 @@ async function submitReportPopup() {
     const problem = document.getElementById('rm-problem').value.trim();
     const byName  = document.getElementById('rm-byname').value.trim();
 
-    if (!machineId) return showToast('⚠️ กรุณาระบุรหัสเครื่องจักร', 'error');
     if (!machine)   return showToast('⚠️ กรุณาระบุชื่อเครื่องจักร', 'error');
     if (!fSel.value) return showToast('⚠️ กรุณาเลือกโรงงาน', 'error');
     if (!area)       return showToast('⚠️ กรุณาเลือกพื้นที่', 'error');
@@ -1220,7 +1210,7 @@ async function submitReportPopup() {
     localStorage.setItem('last_by_name', byName);
     const data = {
         timestamp: new Date().toISOString(), tracking: '',
-        machineName: machine, factory, area, machineId, line,
+        machineName: machine, factory, area, machineId: '', line,
         status: 'แจ้ง Breakdown', bdStart: `${date}T${time || '00:00'}`, bdEnd: '', downtimeMin: 0,
         bdType: '', problem, device: '', whys: [''],
         corrective: '', preventive: '', parts: [], byName, action: 'create',
@@ -1943,6 +1933,7 @@ function openEditMode(item) {
     editMode      = true;
     editRowIndex  = item.rowIndex;
     editSheetName = item.sheetName;
+    loadMachines();   // เตรียม datalist รหัสเครื่องจักร (อิงทะเบียน) ให้ช่างเลือก
     currentTracking = item.tracking || genTracking();   // เก็บเลขเดิม (ของเก่าไม่มี → ออกใหม่)
 
     // fill form
@@ -2380,7 +2371,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v20';
+const EXPORT_VER = 'v21';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
