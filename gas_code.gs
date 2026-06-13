@@ -65,6 +65,22 @@ function doPost(e) {
       return jsonOut({ success: true, action: 'updated' });
     }
 
+    // ---- SET machines (เขียนทับแท็บ _Machines ทั้งหมด — สำหรับ sync) ----
+    if (data.action === 'setMachines') {
+      if (ROLE_PW[(data.pw || '').trim()] !== 'admin')
+        return jsonOut({ success: false, error: 'ต้องเป็น Admin เท่านั้น' });
+      let sh = ss.getSheetByName('_Machines');
+      if (!sh) sh = ss.insertSheet('_Machines');
+      sh.clearContents();
+      const header = ['รหัสเครื่องจักร', 'ชื่อเครื่องจักร', 'โรงงาน', 'พื้นที่', 'ไลน์'];
+      sh.getRange(1, 1, 1, header.length).setValues([header]);
+      const rows = (data.machines || [])
+        .filter(m => m && m.id)
+        .map(m => [m.id || '', m.name || '', m.factory || '', m.area || '', m.line || '']);
+      if (rows.length) sh.getRange(2, 1, rows.length, header.length).setValues(rows);
+      return jsonOut({ success: true, count: rows.length });
+    }
+
     // ---- DELETE row (Admin เท่านั้น — เช็ครหัสฝั่ง server) ----
     if (data.action === 'delete') {
       if (ROLE_PW[(data.pw || '').trim()] !== 'admin')
