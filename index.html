@@ -92,8 +92,9 @@
             Web App URL <span class="text-red-500">*</span>
         </label>
         <input id="gas-url-input" type="url"
-               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500 transition-colors"
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500 transition-colors disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                placeholder="https://script.google.com/macros/s/.../exec">
+        <p id="url-lock-hint" class="text-xs text-amber-600 mt-1">🔒 ต้องเข้าสู่ระบบเป็น Admin เพื่อแก้ไข URL</p>
 
         <!-- LOGIN / ROLE -->
         <div class="mt-5 pt-5 border-t border-gray-200">
@@ -110,7 +111,7 @@
 
         <div class="flex gap-3 justify-end mt-5">
             <button onclick="closeSettings()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ยกเลิก</button>
-            <button onclick="saveSettings()" class="px-6 py-2 bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-lg text-sm transition-colors">บันทึก URL</button>
+            <button id="btn-save-url" onclick="saveSettings()" class="hidden px-6 py-2 bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-lg text-sm transition-colors">บันทึก URL</button>
         </div>
     </div>
 </div>
@@ -773,10 +774,11 @@ function closeSettings() {
     document.getElementById('settings-modal').classList.add('hidden');
 }
 function saveSettings() {
+    if (userRole !== 'admin') { showToast('⚠️ ต้องเข้าสู่ระบบเป็น Admin เพื่อแก้ไข URL', 'error'); return; }
     GAS_URL = document.getElementById('gas-url-input').value.trim();
     localStorage.setItem('gas_url', GAS_URL);
     closeSettings();
-    showToast('✅ บันทึกการตั้งค่าเรียบร้อย', 'success');
+    showToast('✅ บันทึก URL เรียบร้อย', 'success');
 }
 
 // ============================================================
@@ -820,10 +822,16 @@ function doLogout() {
 
 // ปรับ UI ตามบทบาท: Manual Create (eng/admin) + ปุ่มแก้ไข/ลบในรายการ
 function applyRole() {
+    const isAdmin = userRole === 'admin';
     document.getElementById('role-display').textContent = roleLabel(userRole);
     document.getElementById('login-row').classList.toggle('hidden', userRole !== 'user');
     document.getElementById('logout-btn').classList.toggle('hidden', userRole === 'user');
     document.getElementById('btn-manual-create')?.classList.toggle('hidden', userRole === 'user');
+    // แก้ URL ได้เฉพาะ Admin
+    const urlInput = document.getElementById('gas-url-input');
+    if (urlInput) urlInput.disabled = !isAdmin;
+    document.getElementById('btn-save-url')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('url-lock-hint')?.classList.toggle('hidden', isAdmin);
     if (_lastRecords.length) applyRecordFilter();   // re-render ปุ่มตาม role
 }
 
@@ -2101,7 +2109,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v13';
+const EXPORT_VER = 'v14';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
