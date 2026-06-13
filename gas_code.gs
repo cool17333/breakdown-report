@@ -77,6 +77,10 @@ function doPost(e) {
     }
 
     // ---- CREATE new row ----
+    // ล็อกกันเลขรันชนกันเวลาหลายคนแจ้งพร้อมกัน
+    const lock = LockService.getScriptLock();
+    try { lock.waitLock(15000); } catch (e) {}
+
     const factoryCode = (data.factory || 'Unknown').replace(/\s+/g, '');
     const now         = new Date();
     const month       = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM');
@@ -97,12 +101,17 @@ function doPost(e) {
       sheet.setColumnWidth(13, 200);
     }
 
-    // เลข Tracking — ใช้ของ client ถ้ามี ไม่งั้นออกให้ใหม่
-    data.tracking = data.tracking || ('BD-' + Utilities.formatDate(now, 'Asia/Bangkok', 'yyyyMMdd-HHmmss'));
+    // เลขรันต่อเนื่อง แยกตามโรงงาน+เดือน → BD-CHB{n}-{YYYYMM}-{NNN}
+    // seq = จำนวนแถวที่มีอยู่ (header=1 → รายการแรก = 1)
+    const seq = sheet.getLastRow();
+    const ym  = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyyMM');
+    data.tracking = 'BD-' + factoryToCHB(data.factory) + '-' + ym + '-' + String(seq).padStart(3, '0');
 
     const whys    = data.whys || [];
     const partsStr = buildPartsStr(data.parts);
     sheet.appendRow(buildRow(data, whys, partsStr, /*keepTimestamp=*/false, now));
+    SpreadsheetApp.flush();
+    try { lock.releaseLock(); } catch (e) {}
 
     writeLog(ss, data.tracking, 'แจ้ง Breakdown (สร้างใหม่)', data.byName, data.status);
     return jsonOut({ success: true, sheet: sheetName, tracking: data.tracking });
@@ -156,6 +165,12 @@ function writeLog(ss, tracking, action, byName, status) {
     Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm:ss'),
     tracking || '', action || '', byName || '', status || '',
   ]);
+}
+
+// โรงงาน → รหัส CHB (โรงงาน 1 → CHB1, โรงงาน 2 → CHB2)
+function factoryToCHB(factory) {
+  const m = String(factory || '').match(/(\d+)/);
+  return 'CHB' + (m ? m[1] : 'X');
 }
 
 function buildPartsStr(parts) {
