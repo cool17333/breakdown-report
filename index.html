@@ -95,9 +95,34 @@
                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500 transition-colors"
                placeholder="https://script.google.com/macros/s/.../exec">
 
+        <!-- LOGIN / ROLE -->
+        <div class="mt-5 pt-5 border-t border-gray-200">
+            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">เข้าสู่ระบบ (Engineer / Admin)</label>
+            <p class="text-xs text-gray-400 mb-2">บทบาทปัจจุบัน: <span id="role-display" class="font-bold text-gray-700">User (ทั่วไป)</span></p>
+            <div id="login-row" class="flex gap-2">
+                <input id="login-pw" type="password" placeholder="รหัสผ่าน..." autocomplete="off"
+                       onkeydown="if(event.key==='Enter')doLogin()"
+                       class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500 transition-colors">
+                <button onclick="doLogin()" class="px-5 py-2 bg-gray-900 hover:bg-orange-500 text-white font-bold rounded-lg text-sm transition-colors whitespace-nowrap">เข้าสู่ระบบ</button>
+            </div>
+            <button id="logout-btn" onclick="doLogout()" class="hidden text-xs font-bold text-red-600 hover:text-red-800 underline mt-2">ออกจากระบบ</button>
+        </div>
+
         <div class="flex gap-3 justify-end mt-5">
             <button onclick="closeSettings()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ยกเลิก</button>
-            <button onclick="saveSettings()" class="px-6 py-2 bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-lg text-sm transition-colors">บันทึก</button>
+            <button onclick="saveSettings()" class="px-6 py-2 bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-lg text-sm transition-colors">บันทึก URL</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== LOG VIEWER MODAL ==================== -->
+<div id="log-modal" class="modal-bg hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <h2 class="text-base font-bold mb-1 flex items-center gap-2">🕑 ประวัติการดำเนินการ (Log)</h2>
+        <p class="text-xs text-gray-400 mb-4">เลข Tracking: <span id="log-tracking" class="font-mono font-bold text-orange-600"></span></p>
+        <div id="log-body" class="max-h-80 overflow-y-auto space-y-2 text-sm"></div>
+        <div class="flex justify-end mt-5">
+            <button onclick="document.getElementById('log-modal').classList.add('hidden')" class="px-5 py-2 bg-gray-900 hover:bg-black text-white font-bold rounded-lg text-sm transition-colors">ปิด</button>
         </div>
     </div>
 </div>
@@ -215,8 +240,8 @@
         </button>
     </div>
     <div class="text-center mt-6">
-        <button onclick="goManualCreate()"
-                class="text-xs font-bold text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-500 rounded-full px-5 py-2 transition-colors">
+        <button id="btn-manual-create" onclick="goManualCreate()"
+                class="hidden text-xs font-bold text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-500 rounded-full px-5 py-2 transition-colors">
             ✍️ Manual Create — สร้างเอกสารปิดจบ (กรอกครบทีเดียว)
         </button>
     </div>
@@ -732,6 +757,87 @@ function saveSettings() {
     localStorage.setItem('gas_url', GAS_URL);
     closeSettings();
     showToast('✅ บันทึกการตั้งค่าเรียบร้อย', 'success');
+}
+
+// ============================================================
+// ROLES / LOGIN  (User → Engineer → Admin)
+//   เช็ครหัสฝั่ง GAS, เก็บ role+รหัสไว้เฉพาะ session (รีโหลด = ออกจากระบบ)
+// ============================================================
+let userRole  = 'user';   // 'user' | 'engineer' | 'admin'
+let sessionPw = '';       // ส่งไปกับ op ที่ server ต้องตรวจ (delete)
+
+function roleLabel(r) {
+    return r === 'admin' ? 'Administrator' : r === 'engineer' ? 'Engineer' : 'User (ทั่วไป)';
+}
+
+async function doLogin() {
+    const pw = document.getElementById('login-pw').value.trim();
+    if (!pw) return;
+    if (!GAS_URL) { showToast('⚠️ ตั้งค่า Web App URL ก่อน', 'error'); return; }
+    try {
+        const res  = await fetch(`${GAS_URL}?action=login&pw=${encodeURIComponent(pw)}`);
+        const json = await res.json();
+        if (!json.success) { showToast('❌ รหัสผ่านไม่ถูกต้อง', 'error'); return; }
+        userRole = json.role; sessionPw = pw;
+        document.getElementById('login-pw').value = '';
+        applyRole();
+        showToast(`✅ เข้าสู่ระบบเป็น ${roleLabel(userRole)}`, 'success');
+    } catch (err) {
+        showToast('❌ เข้าสู่ระบบไม่สำเร็จ: ' + err.message, 'error');
+    }
+}
+
+function doLogout() {
+    userRole = 'user'; sessionPw = '';
+    applyRole();
+    showToast('ออกจากระบบแล้ว', 'info');
+}
+
+// ปรับ UI ตามบทบาท: Manual Create (eng/admin) + ปุ่มแก้ไข/ลบในรายการ
+function applyRole() {
+    document.getElementById('role-display').textContent = roleLabel(userRole);
+    document.getElementById('login-row').classList.toggle('hidden', userRole !== 'user');
+    document.getElementById('logout-btn').classList.toggle('hidden', userRole === 'user');
+    document.getElementById('btn-manual-create')?.classList.toggle('hidden', userRole === 'user');
+    if (_lastRecords.length) applyRecordFilter();   // re-render ปุ่มตาม role
+}
+
+// ลบเอกสาร (Admin) — server ตรวจรหัสซ้ำอีกชั้น
+async function deleteRecord(item) {
+    if (userRole !== 'admin') { showToast('⚠️ ต้องเข้าสู่ระบบเป็น Admin ก่อน', 'error'); return; }
+    if (!confirm(`ลบเอกสาร ${item.tracking || ''}\n(${item.machineName || ''})\n\nการลบย้อนกลับไม่ได้ — ยืนยัน?`)) return;
+    try {
+        await fetch(GAS_URL, {
+            method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', sheetName: item.sheetName, rowIndex: item.rowIndex,
+                tracking: item.tracking, pw: sessionPw, byName: roleLabel(userRole) }),
+        });
+        showToast('🗑️ ส่งคำขอลบแล้ว — กำลังรีโหลด', 'info');
+        setTimeout(loadRecords, 900);
+    } catch (err) {
+        showToast('❌ ลบไม่สำเร็จ: ' + err.message, 'error');
+    }
+}
+
+// ดูประวัติ log ของเอกสาร (เปิดได้ทุกคน)
+async function openLog(tracking) {
+    if (!GAS_URL) return;
+    document.getElementById('log-tracking').textContent = tracking;
+    document.getElementById('log-body').innerHTML = '<p class="text-gray-400 animate-pulse text-center py-6">กำลังโหลด...</p>';
+    document.getElementById('log-modal').classList.remove('hidden');
+    try {
+        const res  = await fetch(`${GAS_URL}?action=getLog&tracking=${encodeURIComponent(tracking)}`);
+        const json = await res.json();
+        const rows = json.data || [];
+        document.getElementById('log-body').innerHTML = rows.length
+            ? rows.map(l => `<div class="border border-gray-200 rounded-lg px-3 py-2">
+                  <div class="flex justify-between items-center gap-2"><span class="font-bold text-gray-800">${l.action || '—'}</span><span class="text-xs text-gray-400 whitespace-nowrap">${l.time || ''}</span></div>
+                  <div class="text-xs text-gray-500 mt-0.5">โดย: <b>${l.byName || '—'}</b> · สถานะ: ${l.status || '—'}</div>
+              </div>`).join('')
+            : '<p class="text-gray-400 text-center py-6">ยังไม่มีประวัติ</p>';
+    } catch (err) {
+        document.getElementById('log-body').innerHTML = '<p class="text-red-500 text-center py-6">โหลด log ไม่สำเร็จ</p>';
+    }
 }
 
 // ============================================================
@@ -1627,6 +1733,9 @@ function renderRecordsTable(rows) {
         const date = (r.timestamp||'').slice(0,10);
         const badge= STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600';
         const isPending = r.status !== 'ดำเนินการเสร็จสิ้น';
+        const j = JSON.stringify(r).replace(/'/g,"&#39;");
+        const canEdit   = (userRole === 'engineer' || userRole === 'admin');
+        const canDelete = (userRole === 'admin');
         return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
             <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${date}${r.tracking?`<br><span class="text-gray-400 font-mono text-[10px]">${r.tracking}</span>`:''}</td>
             <td class="px-4 py-3 font-bold text-gray-900 text-sm">${r.machineName||'—'}${r.machineId?`<br><span class="text-gray-400 font-normal text-xs">${r.machineId}</span>`:''}</td>
@@ -1637,11 +1746,15 @@ function renderRecordsTable(rows) {
             <td class="px-4 py-3 text-center text-sm font-bold text-orange-600">${dt}</td>
             <td class="px-4 py-3 text-center text-xs text-gray-500">${r.bdType||'—'}</td>
             <td class="px-4 py-3 text-center">
-                <div class="flex gap-1 justify-center">
-                    ${isPending ? `<button onclick='openEditMode(${JSON.stringify(r).replace(/'/g,"&#39;")})'
+                <div class="flex gap-1 justify-center flex-wrap">
+                    ${(canEdit && isPending) ? `<button onclick='openEditMode(${j})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-700 transition-colors">✏️ แก้ไข</button>` : ''}
-                    <button onclick='exportRowPDF(${JSON.stringify(r).replace(/'/g,"&#39;")})'
+                    <button onclick='openLog(${JSON.stringify(r.tracking||"")})'
+                        class="text-xs font-bold px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors">🕑 Log</button>
+                    <button onclick='exportRowPDF(${j})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">📄 PDF</button>
+                    ${canDelete ? `<button onclick='deleteRecord(${j})'
+                        class="text-xs font-bold px-2 py-1 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 transition-colors">🗑️ ลบ</button>` : ''}
                 </div>
             </td>
         </tr>`;
@@ -1902,7 +2015,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v9';
+const EXPORT_VER = 'v10';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
@@ -2263,6 +2376,7 @@ window.addEventListener('DOMContentLoaded', () => {
     resetWhyTree();
     setFormMode('report');   // ฟอร์มเริ่มต้น = แจ้งใหม่ (ย่อ)
     setStatusLocked(true);   // ล็อกสถานะ
+    applyRole();             // เริ่มเป็น User → ซ่อน Manual Create/แก้ไข/ลบ
 
     // เปิดแอปมาที่หน้าเลือกเมนู (Home)
     switchTab('home');

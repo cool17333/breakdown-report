@@ -12,6 +12,12 @@
 
 const SPREADSHEET_ID = ''; // ← ใส่ ID ของ Google Sheet ที่ต้องการ
 
+// รหัสผ่านตามบทบาท (เก็บฝั่ง server — ไม่โผล่ในหน้าเว็บ)
+const ROLE_PW = {
+  'engineer123456': 'engineer',
+  'cpram123456':    'admin',
+};
+
 const HEADERS = [
   'วันที่บันทึก',
   'ชื่อเครื่องจักร',
@@ -57,6 +63,17 @@ function doPost(e) {
 
       writeLog(ss, data.tracking, 'แก้ไข → ' + (data.status || ''), data.byName, data.status);
       return jsonOut({ success: true, action: 'updated' });
+    }
+
+    // ---- DELETE row (Admin เท่านั้น — เช็ครหัสฝั่ง server) ----
+    if (data.action === 'delete') {
+      if (ROLE_PW[(data.pw || '').trim()] !== 'admin')
+        return jsonOut({ success: false, error: 'ต้องเป็น Admin เท่านั้น' });
+      const sheet = ss.getSheetByName(data.sheetName);
+      if (!sheet || !data.rowIndex) throw new Error('Sheet or rowIndex not found');
+      sheet.deleteRow(data.rowIndex);
+      writeLog(ss, data.tracking, 'ลบเอกสาร', data.byName, 'ลบแล้ว');
+      return jsonOut({ success: true, action: 'deleted' });
     }
 
     // ---- CREATE new row ----
@@ -161,6 +178,13 @@ function doGet(e) {
     const month   = e.parameter.month   || ''; // YYYY-MM
     const machineId = e.parameter.machineId || '';
 
+    if (action === 'login') {
+      const role = ROLE_PW[(e.parameter.pw || '').trim()] || '';
+      return jsonOut(role ? { success: true, role } : { success: false, error: 'รหัสผ่านไม่ถูกต้อง' });
+    }
+    if (action === 'getLog') {
+      return doGetLog(e.parameter.tracking || '');
+    }
     if (action === 'getData') {
       return doGetSummary(year, factory, area);
     }
@@ -182,6 +206,7 @@ function doGetSummary(year, factory, area) {
 
   sheets.forEach(sheet => {
     const name = sheet.getName();
+    if (name.charAt(0) === '_') return;   // ข้ามชีตภายใน (_Log)
     if (!name.includes('_')) return;
     const sheetMonth = name.split('_').pop();
     if (!sheetMonth.startsWith(year)) return;
@@ -213,6 +238,7 @@ function doGetAll(factory, area, status, month, machineId) {
 
   sheets.forEach(sheet => {
     const name = sheet.getName();
+    if (name.charAt(0) === '_') return;   // ข้ามชีตภายใน (_Log)
     if (!name.includes('_')) return;
     const sheetMonth = name.split('_').pop(); // YYYY-MM
     const sheetFactory = name.replace('_' + sheetMonth, '');
@@ -260,6 +286,22 @@ function doGetAll(factory, area, status, month, machineId) {
 
   // เรียงล่าสุดก่อน
   rows.sort((a, b) => b.rowIndex - a.rowIndex || b.sheetName.localeCompare(a.sheetName));
+  return jsonOut({ success: true, data: rows });
+}
+
+// ดึงประวัติ log ของเลข Tracking หนึ่งๆ (สำหรับหน้าดู Log)
+function doGetLog(tracking) {
+  const ss  = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const log = ss.getSheetByName('_Log');
+  if (!log) return jsonOut({ success: true, data: [] });
+  const data = log.getDataRange().getValues();
+  const rows = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (tracking && String(r[1]) !== tracking) continue;
+    rows.push({ time: String(r[0]), tracking: r[1], action: r[2], byName: r[3], status: r[4] });
+  }
+  rows.reverse(); // ล่าสุดก่อน
   return jsonOut({ success: true, data: rows });
 }
 
