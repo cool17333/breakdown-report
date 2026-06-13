@@ -496,13 +496,9 @@
                 class="hidden bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-10 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm">
             🚨 <span class="ml-2">แจ้ง Breakdown</span>
         </button>
-        <button id="btn-accept" onclick="acceptJob()"
-                class="hidden bg-orange-500 hover:bg-orange-400 text-white font-bold py-4 px-10 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm">
-            🔧 <span class="ml-2">รับงาน</span>
-        </button>
         <button id="btn-save-edit" onclick="saveEdit()"
                 class="hidden bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm">
-            ✏️ <span class="ml-2">แก้ไขข้อมูล</span>
+            ✏️ <span class="ml-2">แก้ไข Report</span>
         </button>
         <button id="btn-close-job" onclick="closeJob()"
                 class="hidden bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm">
@@ -1075,49 +1071,69 @@ function setBdStartLocked(locked) {
     });
 }
 
-const STAGE_NAV = { report:'🚨 แจ้ง Breakdown', accept:'🔧 รับงาน', close:'✅ ปิดงาน / แก้ไขข้อมูล', manual:'✍️ Manual Create' };
+const STAGE_NAV = { report:'🚨 แจ้ง Breakdown', edit:'✏️ แก้ไข / ปิดงาน Report', manual:'✍️ Manual Create' };
 
-// จัดฟอร์มตามขั้นงาน: layout ฟิลด์ + ล็อก + ปุ่ม footer + เลข Tracking
+// จำกัดตัวเลือกสถานะมุมขวาบนตามขั้นงาน
+function setStatusOptions(allowed) {
+    // ใช้ hidden อย่างเดียว (disabled จะทำให้ค่าที่เลือกอยู่หลุดตอน export งานที่ปิดแล้ว)
+    [...document.querySelectorAll('#status-select option')].forEach(o => {
+        o.hidden = !allowed.includes(o.value);
+    });
+}
+
+// จัดฟอร์มตามขั้นงาน: layout + ล็อก + ตัวเลือกสถานะ + ปุ่ม footer
 function setFormStage(stage) {
     formStage = stage;
-    const light = (stage === 'report' || stage === 'accept');
-    setFormMode(light ? 'report' : 'full');
-    setBdStartLocked(stage === 'close');
+    setFormMode(stage === 'report' ? 'report' : 'full');
+    setBdStartLocked(stage === 'edit');   // แก้ไข/ปิดงาน: ห้ามแก้เวลาเริ่ม BD
 
-    // สถานะ: report ล็อก / อื่นๆ เลือกได้ที่มุมขวาบน (accept ตั้งเริ่มเป็น กำลังดำเนินการ)
+    const sSel = document.getElementById('status-select');
     if (stage === 'report') {
-        setStatusLocked(true);
-    } else {
+        setStatusOptions(['report']); setStatusLocked(true);
+    } else if (stage === 'edit') {
+        setStatusOptions(['wip', 'wait']);            // แก้ไข report เลือกได้แค่ กำลังดำเนินการ/รออะไหล่
         setStatusLocked(false);
-        if (stage === 'accept') { const s = document.getElementById('status-select'); s.value = 'wip'; updateStatus(s); }
+        if (sSel.value === 'report') sSel.value = 'wip';   // เพิ่งแจ้ง → เริ่มที่กำลังดำเนินการ
+        updateStatus(sSel);
+    } else { // manual
+        setStatusOptions(['report', 'wip', 'wait', 'done']); setStatusLocked(false);
     }
 
     showTracking();
-    document.getElementById('tracking-display').classList.toggle('hidden', stage === 'report'); // 1.2 ไม่โชว์เลขตอนแจ้ง
+    document.getElementById('tracking-display').classList.toggle('hidden', stage === 'report');
 
-    const ids = ['btn-export','btn-report','btn-accept','btn-save-edit','btn-close-job','btn-manual-save','btn-cancel-edit'];
+    const ids = ['btn-export','btn-report','btn-save-edit','btn-close-job','btn-manual-save','btn-cancel-edit'];
     ids.forEach(id => document.getElementById(id).classList.add('hidden'));
     const show = id => document.getElementById(id).classList.remove('hidden');
-    if (stage === 'report')      { show('btn-report'); }
-    else if (stage === 'accept') { show('btn-accept'); show('btn-cancel-edit'); }
-    else if (stage === 'close')  { show('btn-export'); show('btn-save-edit'); show('btn-close-job'); show('btn-cancel-edit'); }
-    else if (stage === 'manual') { show('btn-export'); show('btn-manual-save'); show('btn-cancel-edit'); }
+    if (stage === 'report')      show('btn-report');
+    else if (stage === 'edit')   { show('btn-save-edit'); show('btn-close-job'); show('btn-cancel-edit'); }
+    else if (stage === 'manual') { show('btn-manual-save'); show('btn-cancel-edit'); }
 
     document.getElementById('nav-title').textContent = STAGE_NAV[stage] || '';
 }
 
-// ปุ่มลัดเปลี่ยนสถานะ (ใช้ภายในตอนรับงาน/ปิดงาน)
 function quickStatus(v) {
     const sSel = document.getElementById('status-select');
-    sSel.disabled = false;
-    sSel.value = v;
-    updateStatus(sSel);
+    sSel.disabled = false; sSel.value = v; updateStatus(sSel);
 }
 
-// การกระทำตามขั้นงาน (สถานะเลือกที่มุมขวาบน)
-function acceptJob() {                       showAddDataConfirm(); }   // รับงาน — ใช้สถานะที่เลือก (เริ่ม=กำลังดำเนินการ)
-function saveEdit()  {                       showAddDataConfirm(); }   // แก้ไขข้อมูล (คงสถานะที่เลือก)
-function closeJob()  { quickStatus('done'); showAddDataConfirm(); }   // ปิดงาน → เสร็จสิ้น
+function saveEdit() { showAddDataConfirm(); }   // แก้ไข Report — บันทึกด้วยสถานะ wip/wait ที่เลือก
+
+// ปิดงาน — ต้องกรอกครบ (ยกเว้น Why-Why) ถึงจะปิดได้
+function closeJob() {
+    const d = collectFormData();
+    const need = [
+        ['machineId','รหัสเครื่องจักร'], ['machineName','ชื่อเครื่องจักร'],
+        ['factory','โรงงาน'], ['area','พื้นที่'], ['line','ไลน์การผลิต'],
+        ['bdStart','เวลาเริ่ม'], ['bdEnd','เวลาเสร็จสิ้น'], ['bdType','ประเภท'],
+        ['problem','ปัญหา/อาการ'], ['device','อุปกรณ์ที่เกิดปัญหา'],
+        ['corrective','มาตรการแก้ไข'], ['preventive','มาตรการป้องกัน'],
+    ];
+    const miss = need.filter(([k]) => !String(d[k] || '').trim()).map(([, l]) => l);
+    if (miss.length) { showToast('⚠️ ปิดงานไม่ได้ — กรอกให้ครบ: ' + miss.join(', '), 'error'); return; }
+    quickStatus('done');
+    showAddDataConfirm();
+}
 
 function closeTrackingModal() {
     document.getElementById('tracking-modal').classList.add('hidden');
@@ -1333,7 +1349,7 @@ function showToast(msg, type = 'success') {
 // ============================================================
 const AREA_MAP = {
     '1': ['Frozen ดิบ', 'Frozen สุก', 'Chill ดิบ', 'Chill สุก'],
-    '2': ['Frozen dough', 'Sandwich โซนดิบ', 'Sandwich โซนสุก'],
+    '2': ['Sandwich', 'Frozen Dough', 'Preparation'],
 };
 const AREA_MAP_KEY = { 'โรงงาน1': AREA_MAP['1'], 'โรงงาน2': AREA_MAP['2'] };
 
@@ -1827,18 +1843,21 @@ function showAddDataConfirm() {
     const m  = d.downtimeMin % 60;
     const dtText = d.downtimeMin ? `${h} ชม. ${m} นาที` : '—';
 
-    const badge = STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600';
-    const TITLE = { report:'📤 ยืนยันการแจ้ง Breakdown', accept:'🔧 ยืนยันรับงาน', close:'✅ ยืนยันปิดงาน / แก้ไขข้อมูล', manual:'✍️ ยืนยันสร้างเอกสาร (Manual)' };
-    const BTN   = { report:'ยืนยันการแจ้ง', accept:'ยืนยันรับงาน', close:'ยืนยันบันทึก', manual:'ยืนยันบันทึก' };
-    const NAME  = { report:'ผู้แจ้ง', accept:'ผู้รับงาน', close:'ผู้ดำเนินการ', manual:'ผู้ดำเนินการ' };
+    const badge   = STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600';
+    const closing = (formStage === 'edit' && d.status === 'ดำเนินการเสร็จสิ้น');   // กดปิดงาน
+    const title = formStage === 'report' ? '📤 ยืนยันการแจ้ง Breakdown'
+                : formStage === 'manual' ? '✍️ ยืนยันสร้างเอกสาร (Manual)'
+                : closing ? '✅ ยืนยันปิดงาน' : '✏️ ยืนยันแก้ไข Report';
+    const btnLb = formStage === 'report' ? 'ยืนยันการแจ้ง' : closing ? 'ยืนยันปิดงาน' : 'ยืนยันบันทึก';
+    const nameL = formStage === 'report' ? 'ผู้แจ้ง' : 'ผู้ดำเนินการ';
 
-    document.getElementById('confirm-title').textContent     = TITLE[formStage] || TITLE.report;
-    document.getElementById('confirm-btn-label').textContent = BTN[formStage]   || BTN.report;
+    document.getElementById('confirm-title').textContent     = title;
+    document.getElementById('confirm-btn-label').textContent = btnLb;
     document.getElementById('confirm-name-label').innerHTML  =
-        '👤 ยืนยันชื่อ' + (NAME[formStage] || 'ผู้แจ้ง') + ' <span class="text-red-500">*</span>';
+        '👤 ยืนยันชื่อ' + nameL + ' <span class="text-red-500">*</span>';
     document.getElementById('confirm-name').value = localStorage.getItem('last_by_name') || '';
 
-    const isEditStage = (formStage === 'accept' || formStage === 'close');
+    const isEditStage = (formStage === 'edit');
     document.getElementById('confirm-summary').innerHTML = `
         ${isEditStage ? '<div class="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 font-bold">⚠️ กำลังแก้ไขรายการเดิม — ตรวจสอบสถานะให้ถูกต้องก่อนยืนยัน</div>' : ''}
         <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs items-center">
@@ -1887,7 +1906,7 @@ async function confirmAddData() {
                 body: JSON.stringify({ ...data, action: 'update', rowIndex: editRowIndex, sheetName: editSheetName }),
             });
             closeConfirm();
-            const msg = formStage === 'accept' ? '✅ รับงานแล้ว' : formStage === 'close' ? '✅ บันทึก/ปิดงานแล้ว' : '✅ อัปเดตแล้ว';
+            const msg = (data.status === 'ดำเนินการเสร็จสิ้น') ? '✅ ปิดงานเรียบร้อย' : '✅ บันทึกการแก้ไขแล้ว';
             cancelEdit();
             goRecords();                 // กลับหน้ารายการ + รีโหลด
             showToast(msg, 'success');
@@ -1989,13 +2008,11 @@ function openEditMode(item) {
 
     calcDowntime();
 
-    // ขั้นงานตามสถานะ: ยังแจ้งอยู่ → รับงาน, อื่นๆ → ปิดงาน/แก้ไข
-    const stage = (item.status === 'แจ้ง Breakdown') ? 'accept' : 'close';
     switchTab('form');
-    setFormStage(stage);
+    setFormStage('edit');
     showTracking();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    showToast(stage === 'accept' ? '🔧 รับงาน — ตรวจสอบข้อมูลแล้วกดรับงาน' : '✏️ เปิดเอกสารเพื่อแก้ไข/ปิดงาน', 'info');
+    showToast('✏️ แก้ไข Report — กดปุ่มแก้ไขเพื่อบันทึก / ปิดงานเมื่อกรอกครบ', 'info');
 }
 
 function cancelEdit() {
@@ -2371,7 +2388,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v21';
+const EXPORT_VER = 'v22';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
