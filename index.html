@@ -353,6 +353,7 @@
         <div>
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">ประเภท Breakdown</label>
             <select id="inp-bd-type" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
+                <option value="">-- เลือกประเภท --</option>
                 <option>Mechanical</option>
                 <option>Electrical</option>
                 <option>Pneumatic / Hydraulic</option>
@@ -414,7 +415,7 @@
     </div>
 
     <!-- WHY-WHY TREE ANALYSIS -->
-    <div class="stage-fix border border-gray-200 rounded-2xl p-6 shadow-sm mb-6 bg-white">
+    <div id="why-section" class="stage-fix border border-gray-200 rounded-2xl p-6 shadow-sm mb-6 bg-white">
         <div class="flex justify-between items-center mb-5">
             <label class="text-gray-900 font-bold flex items-center text-base uppercase tracking-wide">
                 <span class="mr-2 text-orange-500">🌳</span> การวิเคราะห์แบบรากต้นไม้ (Why-Why Tree Analysis)
@@ -484,9 +485,14 @@
     <div id="gallery-wrap" class="p-8"></div>
 </div>
 
-<!-- FORM ACTION BUTTONS (เปลี่ยนตามขั้นงาน) -->
-<div class="max-w-6xl mx-auto mt-6 no-print pb-10">
-    <div class="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
+<!-- FORM ACTION BUTTONS (เปลี่ยนตามขั้นงาน) — sticky ล่างจอ -->
+<div class="sticky bottom-0 z-30 no-print bg-white/95 backdrop-blur border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] mt-6 py-3">
+    <!-- checklist ของที่ขาดตอนกดปิดงาน -->
+    <div id="close-missing" class="hidden max-w-6xl mx-auto mb-3 bg-red-50 border border-red-300 rounded-xl px-4 py-3">
+        <p class="font-bold text-red-700 text-sm mb-1">⚠️ ปิดงานไม่ได้ — ยังขาดข้อมูล:</p>
+        <ul id="close-missing-list" class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 list-disc pl-5 text-red-600 text-xs"></ul>
+    </div>
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row gap-3 justify-center items-center flex-wrap px-4">
         <button id="btn-export" onclick="showPDFPicker()"
                 class="hidden bg-gray-900 hover:bg-black text-white font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm border border-gray-800">
             <svg class="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -507,6 +513,10 @@
         <button id="btn-manual-save" onclick="showAddDataConfirm()"
                 class="hidden bg-gray-900 hover:bg-black text-white font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm">
             💾 <span class="ml-2">บันทึกเอกสาร</span>
+        </button>
+        <button id="btn-savewhy" onclick="saveWhyOnly()"
+                class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm">
+            🌳 <span class="ml-2">บันทึก Why-Why</span>
         </button>
         <button id="btn-cancel-edit" onclick="goHome()"
                 class="hidden bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-4 px-8 rounded-full shadow transition-all text-sm">
@@ -1071,7 +1081,16 @@ function setBdStartLocked(locked) {
     });
 }
 
-const STAGE_NAV = { report:'🚨 แจ้ง Breakdown', edit:'✏️ แก้ไข / ปิดงาน Report', manual:'✍️ Manual Create' };
+const STAGE_NAV = { report:'🚨 แจ้ง Breakdown', edit:'✏️ แก้ไข / ปิดงาน Report', whyedit:'🌳 แก้ไข Why-Why', manual:'✍️ Manual Create' };
+
+// ล็อกทุกช่องในฟอร์มยกเว้น Why-Why (โหมดแก้ Why-Why หลังปิดงาน)
+function lockExceptWhy(on) {
+    const rc  = document.getElementById('report-content');
+    const why = document.getElementById('why-section');
+    rc.querySelectorAll('input, textarea, select, button').forEach(el => {
+        el.disabled = (on && !(why && why.contains(el)));
+    });
+}
 
 // จำกัดตัวเลือกสถานะมุมขวาบนตามขั้นงาน
 function setStatusOptions(allowed) {
@@ -1084,8 +1103,10 @@ function setStatusOptions(allowed) {
 // จัดฟอร์มตามขั้นงาน: layout + ล็อก + ตัวเลือกสถานะ + ปุ่ม footer
 function setFormStage(stage) {
     formStage = stage;
+    lockExceptWhy(false);   // เปิดทุกช่องก่อน แล้วค่อยล็อกตามขั้น
+    document.getElementById('close-missing').classList.add('hidden');
     setFormMode(stage === 'report' ? 'report' : 'full');
-    setBdStartLocked(stage === 'edit');   // แก้ไข/ปิดงาน: ห้ามแก้เวลาเริ่ม BD
+    setBdStartLocked(stage === 'edit' || stage === 'whyedit');   // ห้ามแก้เวลาเริ่ม
 
     const sSel = document.getElementById('status-select');
     if (stage === 'report') {
@@ -1093,8 +1114,10 @@ function setFormStage(stage) {
     } else if (stage === 'edit') {
         setStatusOptions(['wip', 'wait']);            // แก้ไข report เลือกได้แค่ กำลังดำเนินการ/รออะไหล่
         setStatusLocked(false);
-        if (sSel.value === 'report') sSel.value = 'wip';   // เพิ่งแจ้ง → เริ่มที่กำลังดำเนินการ
+        if (sSel.value === 'report') sSel.value = 'wip';
         updateStatus(sSel);
+    } else if (stage === 'whyedit') {
+        setStatusOptions(['done']); updateStatus(sSel);   // สถานะคงเป็น "เสร็จสิ้น" (จะถูกล็อกด้านล่าง)
     } else { // manual
         setStatusOptions(['report', 'wip', 'wait', 'done']); setStatusLocked(false);
     }
@@ -1102,12 +1125,15 @@ function setFormStage(stage) {
     showTracking();
     document.getElementById('tracking-display').classList.toggle('hidden', stage === 'report');
 
-    const ids = ['btn-export','btn-report','btn-save-edit','btn-close-job','btn-manual-save','btn-cancel-edit'];
+    const ids = ['btn-export','btn-report','btn-save-edit','btn-close-job','btn-manual-save','btn-savewhy','btn-cancel-edit'];
     ids.forEach(id => document.getElementById(id).classList.add('hidden'));
     const show = id => document.getElementById(id).classList.remove('hidden');
-    if (stage === 'report')      show('btn-report');
-    else if (stage === 'edit')   { show('btn-save-edit'); show('btn-close-job'); show('btn-cancel-edit'); }
-    else if (stage === 'manual') { show('btn-manual-save'); show('btn-cancel-edit'); }
+    if (stage === 'report')       show('btn-report');
+    else if (stage === 'edit')    { show('btn-save-edit'); show('btn-close-job'); show('btn-cancel-edit'); }
+    else if (stage === 'whyedit') { show('btn-savewhy'); show('btn-cancel-edit'); }
+    else if (stage === 'manual')  { show('btn-manual-save'); show('btn-cancel-edit'); }
+
+    if (stage === 'whyedit') lockExceptWhy(true);   // ล็อกทุกช่องยกเว้น Why-Why
 
     document.getElementById('nav-title').textContent = STAGE_NAV[stage] || '';
 }
@@ -1118,6 +1144,9 @@ function quickStatus(v) {
 }
 
 function saveEdit() { showAddDataConfirm(); }   // แก้ไข Report — บันทึกด้วยสถานะ wip/wait ที่เลือก
+
+// บันทึกแก้ไขเฉพาะ Why-Why หลังปิดงาน (สถานะคงเป็น เสร็จสิ้น) — ต้องยืนยันชื่อผู้แก้
+function saveWhyOnly() { showAddDataConfirm(); }
 
 // ปิดงาน — ต้องกรอกครบ (ยกเว้น Why-Why) ถึงจะปิดได้
 function closeJob() {
@@ -1130,7 +1159,16 @@ function closeJob() {
         ['corrective','มาตรการแก้ไข'], ['preventive','มาตรการป้องกัน'],
     ];
     const miss = need.filter(([k]) => !String(d[k] || '').trim()).map(([, l]) => l);
-    if (miss.length) { showToast('⚠️ ปิดงานไม่ได้ — กรอกให้ครบ: ' + miss.join(', '), 'error'); return; }
+    if (d.bdStart && d.bdEnd && new Date(d.bdEnd) < new Date(d.bdStart)) miss.push('เวลาเสร็จต้องหลังเวลาเริ่ม');
+
+    const panel = document.getElementById('close-missing');
+    if (miss.length) {
+        document.getElementById('close-missing-list').innerHTML = miss.map(x => `<li>${x}</li>`).join('');
+        panel.classList.remove('hidden');
+        showToast('⚠️ ปิดงานไม่ได้ — ยังกรอกไม่ครบ', 'error');
+        return;
+    }
+    panel.classList.add('hidden');
     quickStatus('done');
     showAddDataConfirm();
 }
@@ -1443,12 +1481,19 @@ function calcDowntime() {
     const s = getDT('bd-start');
     const e = getDT('bd-end');
     const d = document.getElementById('downtime-display');
-    if (!s || !e) { d.textContent = '— ชม. — นาที'; return; }
+    const box = d.parentElement;
+    const setWarn = warn => {
+        box.className = 'flex items-center rounded-lg px-3 py-2 h-[2.375rem] border-2 ' +
+            (warn ? 'bg-red-50 border-red-400' : 'bg-orange-50 border-orange-300');
+        d.className = (warn ? 'text-red-600' : 'text-orange-700') + ' font-bold text-sm w-full text-center tracking-wide';
+    };
+    if (!s || !e) { d.textContent = '— ชม. — นาที'; setWarn(false); return; }
     const diff = new Date(e) - new Date(s);
-    if (diff < 0) { d.textContent = '⚠️ เวลาไม่ถูกต้อง'; return; }
-    const h = Math.floor(diff / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    d.textContent = `${h} ชม. ${m} นาที`;
+    if (diff < 0) { d.textContent = '⚠️ เวลาเสร็จก่อนเวลาเริ่ม'; setWarn(true); return; }
+    const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000);
+    const over = diff > 24 * 3600000;   // > 24 ชม. = เตือน (อาจคีย์ผิด)
+    d.textContent = `${h} ชม. ${m} นาที` + (over ? '  ⚠️ เกิน 24 ชม.' : '');
+    setWarn(over);
 }
 
 // ============================================================
@@ -1845,11 +1890,12 @@ function showAddDataConfirm() {
 
     const badge   = STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600';
     const closing = (formStage === 'edit' && d.status === 'ดำเนินการเสร็จสิ้น');   // กดปิดงาน
-    const title = formStage === 'report' ? '📤 ยืนยันการแจ้ง Breakdown'
-                : formStage === 'manual' ? '✍️ ยืนยันสร้างเอกสาร (Manual)'
+    const title = formStage === 'report'  ? '📤 ยืนยันการแจ้ง Breakdown'
+                : formStage === 'manual'  ? '✍️ ยืนยันสร้างเอกสาร (Manual)'
+                : formStage === 'whyedit' ? '🌳 ยืนยันแก้ไข Why-Why'
                 : closing ? '✅ ยืนยันปิดงาน' : '✏️ ยืนยันแก้ไข Report';
     const btnLb = formStage === 'report' ? 'ยืนยันการแจ้ง' : closing ? 'ยืนยันปิดงาน' : 'ยืนยันบันทึก';
-    const nameL = formStage === 'report' ? 'ผู้แจ้ง' : 'ผู้ดำเนินการ';
+    const nameL = formStage === 'report' ? 'ผู้แจ้ง' : formStage === 'whyedit' ? 'ผู้แก้ไข' : 'ผู้ดำเนินการ';
 
     document.getElementById('confirm-title').textContent     = title;
     document.getElementById('confirm-btn-label').textContent = btnLb;
@@ -1857,7 +1903,7 @@ function showAddDataConfirm() {
         '👤 ยืนยันชื่อ' + nameL + ' <span class="text-red-500">*</span>';
     document.getElementById('confirm-name').value = localStorage.getItem('last_by_name') || '';
 
-    const isEditStage = (formStage === 'edit');
+    const isEditStage = (formStage === 'edit' || formStage === 'whyedit');
     document.getElementById('confirm-summary').innerHTML = `
         ${isEditStage ? '<div class="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 font-bold">⚠️ กำลังแก้ไขรายการเดิม — ตรวจสอบสถานะให้ถูกต้องก่อนยืนยัน</div>' : ''}
         <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs items-center">
@@ -1906,7 +1952,8 @@ async function confirmAddData() {
                 body: JSON.stringify({ ...data, action: 'update', rowIndex: editRowIndex, sheetName: editSheetName }),
             });
             closeConfirm();
-            const msg = (data.status === 'ดำเนินการเสร็จสิ้น') ? '✅ ปิดงานเรียบร้อย' : '✅ บันทึกการแก้ไขแล้ว';
+            const msg = formStage === 'whyedit' ? '✅ บันทึก Why-Why แล้ว'
+                      : (data.status === 'ดำเนินการเสร็จสิ้น') ? '✅ ปิดงานเรียบร้อย' : '✅ บันทึกการแก้ไขแล้ว';
             cancelEdit();
             goRecords();                 // กลับหน้ารายการ + รีโหลด
             showToast(msg, 'success');
@@ -1948,7 +1995,9 @@ let editMode      = false;
 let editRowIndex  = null;
 let editSheetName = null;
 
-function openEditMode(item) {
+function editWhyOnly(item) { openEditMode(item, 'whyedit'); }   // แก้ Why-Why หลังปิดงาน
+
+function openEditMode(item, stage = 'edit') {
     editMode      = true;
     editRowIndex  = item.rowIndex;
     editSheetName = item.sheetName;
@@ -1985,7 +2034,7 @@ function openEditMode(item) {
 
     // bdType
     const typeSel = document.getElementById('inp-bd-type');
-    if (typeSel) typeSel.value = item.bdType || 'Mechanical';
+    if (typeSel) typeSel.value = item.bdType || '';   // ว่าง = บังคับให้เลือกก่อนปิดงาน
 
     // devices
     const dList = document.getElementById('device-list');
@@ -2009,10 +2058,12 @@ function openEditMode(item) {
     calcDowntime();
 
     switchTab('form');
-    setFormStage('edit');
+    setFormStage(stage);
     showTracking();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    showToast('✏️ แก้ไข Report — กดปุ่มแก้ไขเพื่อบันทึก / ปิดงานเมื่อกรอกครบ', 'info');
+    showToast(stage === 'whyedit'
+        ? '🌳 แก้ไขได้เฉพาะ Why-Why — กดบันทึกแล้วยืนยันชื่อผู้แก้ไข'
+        : '✏️ แก้ไข Report — กดปุ่มแก้ไขเพื่อบันทึก / ปิดงานเมื่อกรอกครบ', 'info');
 }
 
 function cancelEdit() {
@@ -2122,6 +2173,8 @@ function renderRecordsTable(rows) {
                 <div class="flex gap-1 justify-center flex-wrap">
                     ${(canEdit && isPending) ? `<button onclick='openEditMode(${j})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-700 transition-colors">✏️ แก้ไข</button>` : ''}
+                    ${(canEdit && isDone) ? `<button onclick='editWhyOnly(${j})'
+                        class="text-xs font-bold px-2 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-700 transition-colors">🌳 Why-Why</button>` : ''}
                     ${isAdmin ? `<button onclick='openLog(${JSON.stringify(r.tracking||"")})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors">🕑 Log</button>` : ''}
                     ${isDone ? `<button onclick='exportRowPDF(${j})'
@@ -2388,7 +2441,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v22';
+const EXPORT_VER = 'v23';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง

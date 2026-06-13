@@ -41,6 +41,8 @@ const HEADERS = [
   'อะไหล่ที่ใช้',
   'เลข Tracking',         // index 24
   'ผู้ดำเนินการล่าสุด',   // index 25
+  'ผู้รับงาน',            // index 26
+  'ผู้ปิดงาน',            // index 27
 ];
 
 // ============================================================
@@ -55,6 +57,17 @@ function doPost(e) {
     if (data.action === 'update') {
       const sheet = ss.getSheetByName(data.sheetName);
       if (!sheet || !data.rowIndex) throw new Error('Sheet or rowIndex not found');
+
+      // ผู้รับงาน = คนแรกที่รับงาน (ไม่ทับ) / ผู้ปิดงาน = คนที่กดปิดงาน
+      const prev = sheet.getRange(data.rowIndex, 1, 1, HEADERS.length).getValues()[0];
+      data.acceptedBy = prev[26] || '';
+      data.closedBy   = prev[27] || '';
+      if (data.status === 'ดำเนินการเสร็จสิ้น') {
+        if (!data.closedBy)   data.closedBy   = data.byName || '';   // เซ็ตครั้งแรกที่ปิด (แก้ Why-Why ภายหลังไม่ทับ)
+        if (!data.acceptedBy) data.acceptedBy = data.byName || '';
+      } else if (data.status === 'กำลังดำเนินการแก้ไข' || data.status === 'รออะไหล่') {
+        if (!data.acceptedBy) data.acceptedBy = data.byName || '';
+      }
 
       const whys    = data.whys || [];
       const partsStr = buildPartsStr(data.parts);
@@ -164,6 +177,8 @@ function buildRow(data, whys, partsStr, keepTimestamp, now) {
     partsStr,
     data.tracking      || '',
     data.byName        || '',
+    data.acceptedBy    || '',
+    data.closedBy      || '',
   ];
 }
 
@@ -314,6 +329,8 @@ function doGetAll(factory, area, status, month, machineId) {
         parts:       r[23] || '',
         tracking:    r[24] || '',
         byName:      r[25] || '',
+        acceptedBy:  r[26] || '',
+        closedBy:    r[27] || '',
       });
     }
   });
