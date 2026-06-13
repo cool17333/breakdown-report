@@ -194,9 +194,9 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
         <button onclick="goReport()"
                 class="group bg-white rounded-2xl shadow-sm border border-gray-200 hover:border-red-400 hover:shadow-lg transition-all p-7 text-center transform hover:-translate-y-1">
-            <div class="text-5xl mb-4">📝</div>
-            <p class="text-lg font-bold text-gray-900 mb-1">แจ้ง Breakdown Report</p>
-            <p class="text-xs text-gray-500 leading-relaxed">สร้างใบแจ้งเหตุเครื่องจักรเสียใหม่</p>
+            <div class="text-5xl mb-4">🚨</div>
+            <p class="text-lg font-bold text-gray-900 mb-1">แจ้ง Breakdown</p>
+            <p class="text-xs text-gray-500 leading-relaxed">แจ้งเหตุเครื่องจักรเสีย (กรอกสั้นๆ — อาการ + รูป)</p>
             <span class="inline-block mt-4 text-xs font-bold text-white bg-red-500 group-hover:bg-red-600 px-4 py-1.5 rounded-full transition-colors">+ แจ้งใหม่</span>
         </button>
         <button onclick="goRecords()"
@@ -212,6 +212,12 @@
             <p class="text-lg font-bold text-gray-900 mb-1">สรุปข้อมูล Breakdown</p>
             <p class="text-xs text-gray-500 leading-relaxed">KPI / กราฟ / ตารางสรุปรายเดือน-พื้นที่</p>
             <span class="inline-block mt-4 text-xs font-bold text-white bg-blue-500 group-hover:bg-blue-600 px-4 py-1.5 rounded-full transition-colors">ดูสรุป</span>
+        </button>
+    </div>
+    <div class="text-center mt-6">
+        <button onclick="goManualCreate()"
+                class="text-xs font-bold text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-500 rounded-full px-5 py-2 transition-colors">
+            ✍️ Manual Create — สร้างเอกสารปิดจบ (กรอกครบทีเดียว)
         </button>
     </div>
 </div>
@@ -247,6 +253,14 @@
     </div>
 
     <div class="p-6 md:p-8">
+
+    <!-- STAGE ACTIONS (โผล่ตอนแก้ไข/Manual — เปลี่ยนสถานะงาน) -->
+    <div id="stage-actions" class="hidden no-export mb-5 flex flex-wrap items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+        <span class="text-xs font-bold text-amber-800 mr-1">ขั้นตอนงาน:</span>
+        <button type="button" onclick="quickStatus('wip')"  class="text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors">🔧 รับงาน / กำลังดำเนินการ</button>
+        <button type="button" onclick="quickStatus('wait')" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-yellow-100 text-yellow-700 hover:bg-yellow-200 transition-colors">⏳ รออะไหล่</button>
+        <button type="button" onclick="quickStatus('done')" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors">✅ ปิดงาน / เสร็จสิ้น</button>
+    </div>
 
     <!-- MACHINE + TIME INFO -->
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -284,7 +298,7 @@
                        class="w-[4.5rem] text-center bg-white border border-gray-300 rounded-lg px-2 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors text-gray-800">
             </div>
         </div>
-        <div>
+        <div class="stage-fix">
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">🕐 เวลาเสร็จสิ้น</label>
             <div class="flex gap-2">
                 <input type="date" id="bd-end-date" onchange="calcDowntime()"
@@ -349,7 +363,7 @@
                 </div>
             </div>
             <!-- AFTER -->
-            <div class="flex flex-col">
+            <div class="flex flex-col stage-fix">
                 <div id="photo-box-after" class="relative border-2 border-dashed border-green-300 hover:border-green-500 rounded-xl bg-green-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors flex-1" style="min-height:13rem;">
                     <div class="absolute top-3 left-3 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md z-10">หลังแก้ไข</div>
                     <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="setImage(event,'after')">
@@ -364,7 +378,7 @@
     </div>
 
     <!-- WHY-WHY TREE ANALYSIS -->
-    <div class="border border-gray-200 rounded-2xl p-6 shadow-sm mb-6 bg-white">
+    <div class="stage-fix border border-gray-200 rounded-2xl p-6 shadow-sm mb-6 bg-white">
         <div class="flex justify-between items-center mb-5">
             <label class="text-gray-900 font-bold flex items-center text-base uppercase tracking-wide">
                 <span class="mr-2 text-orange-500">🌳</span> การวิเคราะห์แบบรากต้นไม้ (Why-Why Tree Analysis)
@@ -378,7 +392,7 @@
     </div>
 
     <!-- ACTION + PREVENTION -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div class="stage-fix grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div class="bg-[#18181b] rounded-2xl p-6 text-white shadow-md border border-gray-800 focus-within:border-orange-500 transition-all">
             <label class="text-white text-sm font-bold flex items-center mb-3 uppercase tracking-wide border-b border-gray-700 pb-3">
                 <span class="mr-2 text-orange-500">🔧</span> มาตรการแก้ไข (CORRECTIVE ACTION)
@@ -394,7 +408,7 @@
     </div>
 
     <!-- SPARE PARTS -->
-    <div class="border border-gray-200 rounded-2xl overflow-hidden shadow-sm mb-6">
+    <div class="stage-fix border border-gray-200 rounded-2xl overflow-hidden shadow-sm mb-6">
         <div class="bg-[#18181b] px-6 py-4 flex justify-between items-center">
             <label class="text-white font-bold text-sm uppercase tracking-wide flex items-center">
                 <span class="mr-2 text-orange-500">🔩</span> อะไหล่ที่ใช้ / เปลี่ยน (Spare Parts Used)
@@ -742,10 +756,28 @@ function showTracking() {
 // ============================================================
 const PAGE_TITLE = {
     home:    '',
-    form:    '📝 แจ้ง Breakdown Report',
+    form:    '🚨 แจ้ง Breakdown',
     records: '📋 รายการ Breakdown',
     summary: '📊 สรุปข้อมูล Breakdown',
 };
+
+// โหมดฟอร์ม: 'report' = แจ้งใหม่ (กรอกน้อย, ล็อกสถานะ) / 'full' = แก้ไข+Manual (กรอกครบ)
+let formMode = 'report';
+
+function setFormMode(mode) {
+    formMode = mode;
+    const full = mode === 'full';
+    document.querySelectorAll('.stage-fix').forEach(el => el.classList.toggle('hidden', !full));
+    document.getElementById('stage-actions').classList.toggle('hidden', !full);
+}
+
+// ปุ่มลัดเปลี่ยนสถานะงาน (รับงาน/รออะไหล่/ปิดงาน)
+function quickStatus(v) {
+    const sSel = document.getElementById('status-select');
+    sSel.disabled = false;
+    sSel.value = v;
+    updateStatus(sSel);
+}
 
 function switchTab(name) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -765,10 +797,20 @@ function goHome() {
     switchTab('home');
 }
 
-// แจ้ง Breakdown ใหม่ → ฟอร์มเปล่า + ล็อกสถานะไว้ที่ "แจ้ง Breakdown"
+// แจ้ง Breakdown ใหม่ → ฟอร์มแบบย่อ (อาการ+รูป) + ล็อกสถานะ "แจ้ง Breakdown"
 function goReport() {
-    resetForm();
+    resetForm('report');
     switchTab('form');
+}
+
+// Manual Create → ฟอร์มเต็ม กรอกครบทีเดียว เลือกสถานะได้ (ค่าเริ่มต้น = เสร็จสิ้น)
+function goManualCreate() {
+    resetForm('full');
+    const sSel = document.getElementById('status-select');
+    sSel.value = 'done'; updateStatus(sSel);
+    document.getElementById('btn-add-label').textContent = 'บันทึกเอกสาร (Manual)';
+    switchTab('form');
+    document.getElementById('nav-title').textContent = '✍️ Manual Create';
 }
 
 function goRecords() {
@@ -780,8 +822,8 @@ function goSummary() {
     switchTab('summary');
 }
 
-// ล้างฟอร์มให้เป็นใบแจ้งใหม่ (เลิกโหมดแก้ไข + ล็อกสถานะ)
-function resetForm() {
+// ล้างฟอร์ม — mode 'report' (แจ้งใหม่ย่อ) หรือ 'full' (Manual กรอกครบ)
+function resetForm(mode = 'report') {
     cancelEdit();
     ['machine-name','inp-machine-id','inp-line','inp-problem','inp-corrective','inp-preventive']
         .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -798,7 +840,10 @@ function resetForm() {
 
     currentTracking = genTracking();   // ใบแจ้งใหม่ → เลข Tracking ใหม่
     showTracking();
-    setStatusLocked(true);   // ใบแจ้งใหม่ต้องเป็น "แจ้ง Breakdown" เท่านั้น
+
+    setFormMode(mode);
+    if (mode === 'full') setStatusLocked(false);   // Manual → เลือกสถานะได้
+    else                 setStatusLocked(true);    // แจ้งใหม่ → ล็อก "แจ้ง Breakdown"
 }
 
 function checkSummarySetup() {
@@ -1322,20 +1367,24 @@ function showAddDataConfirm() {
     if (!d.machineName) { showToast('⚠️ กรุณาระบุชื่อเครื่องจักร', 'error'); return; }
     if (!d.factory)     { showToast('⚠️ กรุณาเลือกโรงงาน', 'error'); return; }
     if (!d.bdStart)     { showToast('⚠️ กรุณาระบุเวลาเริ่ม Breakdown', 'error'); return; }
+    if (formMode === 'report' && !d.problem) { showToast('⚠️ กรุณาระบุอาการ (ปัญหาที่พบ)', 'error'); return; }
 
     const h  = Math.floor(d.downtimeMin / 60);
     const m  = d.downtimeMin % 60;
     const dtText = d.downtimeMin ? `${h} ชม. ${m} นาที` : '—';
 
-    const isEdit = !!(editMode && editRowIndex);
-    const badge  = STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600';
+    const isEdit   = !!(editMode && editRowIndex);
+    const isManual = !isEdit && formMode === 'full';
+    const badge    = STATUS_BADGE[d.status] || 'bg-gray-100 text-gray-600';
 
-    document.getElementById('confirm-title').textContent = isEdit ? '✏️ ยืนยันการแก้ไขข้อมูล' : '📤 ยืนยันการแจ้ง Breakdown';
-    document.getElementById('confirm-btn-label').textContent = isEdit ? 'ยืนยันการแก้ไข' : 'ยืนยันการแจ้ง';
+    document.getElementById('confirm-title').textContent =
+        isEdit ? '✏️ ยืนยันการแก้ไขข้อมูล' : isManual ? '✍️ ยืนยันสร้างเอกสาร (Manual)' : '📤 ยืนยันการแจ้ง Breakdown';
+    document.getElementById('confirm-btn-label').textContent =
+        isEdit ? 'ยืนยันการแก้ไข' : isManual ? 'ยืนยันบันทึก' : 'ยืนยันการแจ้ง';
 
     // ชื่อผู้ทำ — label ตามขั้น + เติมชื่อล่าสุดที่เคยกรอก
     document.getElementById('confirm-name-label').innerHTML =
-        (isEdit ? '👤 ยืนยันชื่อผู้ดำเนินการ' : '👤 ยืนยันชื่อผู้แจ้ง') + ' <span class="text-red-500">*</span>';
+        (isEdit || isManual ? '👤 ยืนยันชื่อผู้ดำเนินการ' : '👤 ยืนยันชื่อผู้แจ้ง') + ' <span class="text-red-500">*</span>';
     document.getElementById('confirm-name').value = localStorage.getItem('last_by_name') || '';
 
     document.getElementById('confirm-summary').innerHTML = `
@@ -1420,6 +1469,7 @@ function openEditMode(item) {
     editSheetName = item.sheetName;
     currentTracking = item.tracking || genTracking();   // เก็บเลขเดิม (ของเก่าไม่มี → ออกใหม่)
     showTracking();
+    setFormMode('full');   // แก้ไข → แสดงทุก section + ปุ่มขั้นตอนงาน
 
     // fill form
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -1491,7 +1541,8 @@ function cancelEdit() {
     document.getElementById('btn-add-label').textContent = 'แจ้ง Breakdown';
     document.getElementById('btn-cancel-edit').classList.add('hidden');
     setVisible('edit-banner', false);
-    setStatusLocked(true);   // กลับสู่โหมดแจ้งใหม่ → ล็อกสถานะ
+    setFormMode('report');   // กลับสู่โหมดแจ้งใหม่ (ย่อ)
+    setStatusLocked(true);   // ล็อกสถานะ
 }
 
 // ============================================================
@@ -1851,7 +1902,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v8';
+const EXPORT_VER = 'v9';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
@@ -2210,7 +2261,8 @@ window.addEventListener('DOMContentLoaded', () => {
     addDeviceRow();
     addPartRow();
     resetWhyTree();
-    setStatusLocked(true);   // ฟอร์มเริ่มต้น = แจ้งใหม่ → ล็อกสถานะ
+    setFormMode('report');   // ฟอร์มเริ่มต้น = แจ้งใหม่ (ย่อ)
+    setStatusLocked(true);   // ล็อกสถานะ
 
     // เปิดแอปมาที่หน้าเลือกเมนู (Home)
     switchTab('home');
