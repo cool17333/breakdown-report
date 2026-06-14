@@ -113,18 +113,7 @@
             <button id="logout-btn" onclick="doLogout()" class="hidden text-xs font-bold text-red-600 hover:text-red-800 underline mt-2">ออกจากระบบ</button>
         </div>
 
-        <!-- MACHINE MASTER IMPORT (Admin) -->
-        <div id="machine-import-row" class="hidden mt-5 pt-5 border-t border-gray-200">
-            <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">รายการเครื่องจักร (Master)</label>
-            <p class="text-xs text-gray-400 mb-2">อัปโหลด Excel/CSV → เขียนทับทั้งหมด · คอลัมน์: รหัส · ชื่อ · โรงงาน · พื้นที่ · ไลน์</p>
-            <div class="flex items-center gap-3">
-                <label class="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-orange-500 text-white font-bold rounded-lg text-sm cursor-pointer transition-colors">
-                    📋 เลือกไฟล์ Excel
-                    <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importMachinesFile(this)">
-                </label>
-                <span id="machine-count" class="text-xs text-gray-400"></span>
-            </div>
-        </div>
+        <p class="text-xs text-gray-400 mt-5 pt-5 border-t border-gray-200">🛠️ จัดการ <b>ทะเบียนเครื่องจักร</b> (นำเข้า Excel / เพิ่ม / แก้ไข / ลบ) ได้ที่เมนู "ทะเบียนเครื่องจักร" หน้าแรก (เฉพาะ Admin)</p>
 
         <div class="flex gap-3 justify-end mt-5">
             <button onclick="closeSettings()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ยกเลิก</button>
@@ -257,10 +246,14 @@
             <span class="inline-block mt-4 text-xs font-bold text-white bg-blue-500 group-hover:bg-blue-600 px-4 py-1.5 rounded-full transition-colors">ดูสรุป</span>
         </button>
     </div>
-    <div class="text-center mt-6">
+    <div class="text-center mt-6 flex flex-wrap gap-3 justify-center">
         <button id="btn-manual-create" onclick="goManualCreate()"
                 class="hidden text-xs font-bold text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-500 rounded-full px-5 py-2 transition-colors">
             ✍️ Manual Create — สร้างเอกสารปิดจบ (กรอกครบทีเดียว)
+        </button>
+        <button id="btn-machines" onclick="goMachines()"
+                class="hidden text-xs font-bold text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-500 rounded-full px-5 py-2 transition-colors">
+            🛠️ ทะเบียนเครื่องจักร (Admin)
         </button>
     </div>
 </div>
@@ -849,6 +842,83 @@
 </div>
 </div><!-- end panel-summary -->
 
+<!-- ==================== MACHINE REGISTRY (Admin) ==================== -->
+<div id="panel-machines" class="tab-panel p-4 md:p-8">
+<div class="max-w-6xl mx-auto">
+
+    <!-- IMPORT CARD -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+        <p class="text-sm font-bold text-gray-800 mb-1">📥 นำเข้าจาก Excel (แยกไฟล์ตามพื้นที่)</p>
+        <p class="text-xs text-gray-400 mb-3">เลือกโรงงาน+พื้นที่ของไฟล์ → เลือกไฟล์ → จับคู่คอลัมน์ → ตรวจสอบ → ยืนยันนำเข้า</p>
+        <div class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">โรงงาน (ของไฟล์นี้)</label>
+                <select id="imp-factory" onchange="impUpdateArea()" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500">
+                    <option value="">-- เลือก --</option><option value="1">โรงงาน 1</option><option value="2">โรงงาน 2</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gray-500 block mb-1">พื้นที่ (ของไฟล์นี้)</label>
+                <select id="imp-area" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500">
+                    <option value="">-- เลือกโรงงานก่อน --</option>
+                </select>
+            </div>
+            <label class="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-orange-500 text-white font-bold rounded-lg text-sm cursor-pointer transition-colors">
+                📋 เลือกไฟล์ Excel
+                <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="impReadFile(this)">
+            </label>
+        </div>
+
+        <!-- COLUMN MAPPING + PREVIEW -->
+        <div id="imp-map" class="hidden mt-4 pt-4 border-t border-gray-200">
+            <p class="text-xs font-bold text-gray-600 mb-2">จับคู่คอลัมน์</p>
+            <div class="flex flex-wrap gap-3 mb-3">
+                <div><label class="text-xs text-gray-500 block mb-1">รหัสเครื่องจักร <span class="text-red-500">*</span></label><select id="imp-col-id"  onchange="impPreview()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm"></select></div>
+                <div><label class="text-xs text-gray-500 block mb-1">ชื่อเครื่องจักร <span class="text-red-500">*</span></label><select id="imp-col-name" onchange="impPreview()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm"></select></div>
+                <div><label class="text-xs text-gray-500 block mb-1">Line ผลิต</label><select id="imp-col-line" onchange="impPreview()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm"></select></div>
+            </div>
+            <p class="text-xs text-gray-500 mb-2">ข้อมูลที่จะนำเข้า: <span id="imp-count" class="font-bold text-gray-800"></span></p>
+            <div class="overflow-x-auto max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                <table class="w-full text-xs"><thead class="bg-gray-100 sticky top-0"><tr>
+                    <th class="px-3 py-2 text-left">รหัส</th><th class="px-3 py-2 text-left">ชื่อ</th><th class="px-3 py-2 text-left">Line</th>
+                </tr></thead><tbody id="imp-preview-body"></tbody></table>
+            </div>
+            <div class="flex gap-3 justify-end mt-3">
+                <button onclick="impCancel()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900">ยกเลิก</button>
+                <button id="imp-confirm" onclick="impConfirm()" class="px-6 py-2 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg text-sm">✅ ยืนยันนำเข้า</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- REGISTRY TABLE -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="bg-[#18181b] px-5 py-4 flex flex-wrap items-center gap-3">
+            <p class="text-white font-bold text-sm uppercase tracking-wide mr-auto">🛠️ ทะเบียนเครื่องจักร</p>
+            <select id="mach-f-factory" onchange="machUpdateFilterArea();renderMachTable()" class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs outline-none">
+                <option value="">ทุกโรงงาน</option><option value="โรงงาน 1">โรงงาน 1</option><option value="โรงงาน 2">โรงงาน 2</option>
+            </select>
+            <select id="mach-f-area" onchange="renderMachTable()" class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs outline-none"><option value="">ทุกพื้นที่</option></select>
+            <span id="mach-count" class="text-gray-400 text-xs font-bold"></span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
+                    <th class="px-3 py-2 text-left">รหัสเครื่องจักร</th><th class="px-3 py-2 text-left">ชื่อเครื่องจักร</th>
+                    <th class="px-3 py-2 text-left">โรงงาน</th><th class="px-3 py-2 text-left">พื้นที่</th>
+                    <th class="px-3 py-2 text-left">Line</th><th class="px-3 py-2 w-10"></th>
+                </tr></thead>
+                <tbody id="mach-tbody"></tbody>
+            </table>
+        </div>
+        <div class="px-5 py-3 flex flex-wrap gap-3 justify-between items-center border-t border-gray-200 bg-gray-50">
+            <button onclick="machAddRow()" class="text-xs font-bold px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 transition-colors">+ เพิ่มเครื่องจักร</button>
+            <button onclick="saveMachines()" class="text-sm font-bold px-6 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors">💾 บันทึกทั้งหมด</button>
+        </div>
+    </div>
+    <div id="mach-loading" class="hidden text-center py-10 text-gray-400 font-bold animate-pulse">⏳ กำลังโหลด...</div>
+</div>
+</div><!-- end panel-machines -->
+
 <script>
 // ============================================================
 // SETTINGS — Google Apps Script
@@ -939,54 +1009,184 @@ function applyRole() {
     if (urlInput) urlInput.disabled = !isAdmin;
     document.getElementById('btn-save-url')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('url-lock-hint')?.classList.toggle('hidden', isAdmin);
-    document.getElementById('machine-import-row')?.classList.toggle('hidden', !isAdmin);   // นำเข้าเครื่องจักร = Admin
+    document.getElementById('btn-machines')?.classList.toggle('hidden', !isAdmin);   // ทะเบียนเครื่องจักร = Admin
     if (_lastRecords.length) applyRecordFilter();   // re-render ปุ่มตาม role
 }
 
-// นำเข้ารายการเครื่องจักรจากไฟล์ Excel/CSV → เขียนทับแท็บ _Machines (Admin)
-async function importMachinesFile(input) {
-    const file = input.files[0]; if (!file) return;
-    if (userRole !== 'admin') { showToast('⚠️ ต้องเข้าสู่ระบบเป็น Admin', 'error'); input.value = ''; return; }
-    if (typeof XLSX === 'undefined') { showToast('❌ โหลดตัวอ่าน Excel ไม่สำเร็จ', 'error'); input.value = ''; return; }
+// ============================================================
+// MACHINE REGISTRY PAGE (Admin) — จัดการทะเบียนเครื่องจักร
+// ============================================================
+let machineMaster = [];   // สำเนาที่แก้ไขได้ (โหลดจาก GAS, บันทึกกลับทั้งชุด)
+
+function goMachines() {
+    if (userRole !== 'admin') { showToast('⚠️ ต้องเข้าสู่ระบบเป็น Admin', 'error'); return; }
+    switchTab('machines');
+    loadMachineMaster();
+}
+
+async function loadMachineMaster() {
+    if (!GAS_URL) return;
+    setVisible('mach-loading', true);
     try {
-        const wb   = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });   // array ของ array
-        if (!rows.length) { showToast('⚠️ ไฟล์ว่าง', 'error'); input.value = ''; return; }
-
-        // หา column จากหัวตาราง (ไม่เจอ → ใช้ตำแหน่ง A-E)
-        const head = rows[0].map(h => String(h).toLowerCase());
-        const col  = kw => head.findIndex(h => kw.some(k => h.includes(k)));
-        let cId = col(['รหัส','code','id']), cName = col(['ชื่อ','name']),
-            cFac = col(['โรงงาน','factory']), cArea = col(['พื้นที่','area']), cLine = col(['ไลน์','line','สาย']);
-        let start = 1;
-        if (cId < 0) { cId = 0; cName = 1; cFac = 2; cArea = 3; cLine = 4; start = 0; }
-
-        const machines = [];
-        for (let i = start; i < rows.length; i++) {
-            const r = rows[i], id = String(r[cId] || '').trim();
-            if (!id) continue;
-            machines.push({
-                id, name: String(r[cName] || '').trim(), factory: String(r[cFac] || '').trim(),
-                area: String(r[cArea] || '').trim(), line: cLine >= 0 ? String(r[cLine] || '').trim() : '',
-            });
-        }
-        if (!machines.length) { showToast('⚠️ ไม่พบข้อมูลเครื่องจักรในไฟล์', 'error'); input.value = ''; return; }
-        if (!confirm(`นำเข้า ${machines.length} เครื่องจักร?\n(จะเขียนทับรายการเดิมทั้งหมด)`)) { input.value = ''; return; }
-
-        const res  = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-            body: JSON.stringify({ action: 'setMachines', pw: sessionPw, machines }) });
+        const res  = await fetch(`${GAS_URL}?action=getMachines`);
         const json = await res.json();
-        if (json && json.success) {
-            document.getElementById('machine-count').textContent = `✅ ${json.count} เครื่องจักร`;
-            showToast(`✅ นำเข้า ${json.count} เครื่องจักรสำเร็จ`, 'success');
-            machineList = []; loadMachines();
-        } else {
-            showToast('❌ นำเข้าไม่สำเร็จ: ' + (json && json.error || 'ไม่ทราบสาเหตุ'), 'error');
-        }
-    } catch (e) {
-        showToast('❌ อ่านไฟล์ไม่ได้: ' + e.message, 'error');
-    } finally { input.value = ''; }
+        machineMaster = (json.data || []).map(m => ({ id:m.id||'', name:m.name||'', factory:m.factory||'', area:m.area||'', line:m.line||'' }));
+    } catch (e) { showToast('❌ โหลดทะเบียนไม่สำเร็จ', 'error'); }
+    setVisible('mach-loading', false);
+    machUpdateFilterArea();
+    renderMachTable();
+}
+
+// filter พื้นที่ตามโรงงานที่เลือก (รวมพื้นที่จริงที่มีในข้อมูล + ตาม AREA_MAP)
+function machUpdateFilterArea() {
+    const f = document.getElementById('mach-f-factory').value;
+    const sel = document.getElementById('mach-f-area');
+    const cur = sel.value;
+    const areas = new Set();
+    if (f === 'โรงงาน 1') (AREA_MAP['1']||[]).forEach(a=>areas.add(a));
+    else if (f === 'โรงงาน 2') (AREA_MAP['2']||[]).forEach(a=>areas.add(a));
+    machineMaster.forEach(m => { if (!f || m.factory === f) { if (m.area) areas.add(m.area); } });
+    sel.innerHTML = '<option value="">ทุกพื้นที่</option>' + [...areas].map(a=>`<option ${a===cur?'selected':''}>${a}</option>`).join('');
+}
+
+const AREA_OPTS = (fac) => (/2/.test(fac) ? AREA_MAP['2'] : /1/.test(fac) ? AREA_MAP['1'] : []);
+
+function renderMachTable() {
+    const ff = document.getElementById('mach-f-factory').value;
+    const fa = document.getElementById('mach-f-area').value;
+    const tb = document.getElementById('mach-tbody');
+    const rows = machineMaster
+        .map((m, i) => ({ m, i }))
+        .filter(({m}) => (!ff || m.factory === ff) && (!fa || m.area === fa));
+    document.getElementById('mach-count').textContent = `${rows.length} เครื่อง`;
+    const inp = (idx, k, val) => `<input value="${String(val).replace(/"/g,'&quot;')}" oninput="machineMaster[${idx}].${k}=this.value"
+        class="w-full border border-gray-200 rounded px-2 py-1 text-xs outline-none focus:border-orange-500">`;
+    tb.innerHTML = rows.length ? rows.map(({m, i}) => {
+        const areaOpts = ['', ...AREA_OPTS(m.factory)];
+        return `<tr class="border-b border-gray-100">
+            <td class="px-3 py-1.5">${inp(i,'id',m.id)}</td>
+            <td class="px-3 py-1.5">${inp(i,'name',m.name)}</td>
+            <td class="px-3 py-1.5">
+                <select onchange="machineMaster[${i}].factory=this.value;machineMaster[${i}].area='';renderMachTable()" class="w-full border border-gray-200 rounded px-2 py-1 text-xs">
+                    <option value="" ${!m.factory?'selected':''}>--</option>
+                    <option ${m.factory==='โรงงาน 1'?'selected':''}>โรงงาน 1</option>
+                    <option ${m.factory==='โรงงาน 2'?'selected':''}>โรงงาน 2</option>
+                </select>
+            </td>
+            <td class="px-3 py-1.5">
+                <select onchange="machineMaster[${i}].area=this.value" class="w-full border border-gray-200 rounded px-2 py-1 text-xs">
+                    ${areaOpts.map(a=>`<option ${a===m.area?'selected':''}>${a||'--'}</option>`).join('')}
+                </select>
+            </td>
+            <td class="px-3 py-1.5">${inp(i,'line',m.line)}</td>
+            <td class="px-3 py-1.5 text-center"><button onclick="machDeleteRow(${i})" class="text-gray-300 hover:text-red-500 font-bold text-lg leading-none">×</button></td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="6" class="text-center text-gray-400 py-8 text-sm">ไม่มีข้อมูล — กด "เพิ่มเครื่องจักร" หรือ นำเข้า Excel</td></tr>';
+}
+
+function machAddRow() {
+    const f = document.getElementById('mach-f-factory').value;
+    const a = document.getElementById('mach-f-area').value;
+    machineMaster.unshift({ id:'', name:'', factory:f||'', area:a||'', line:'' });
+    renderMachTable();
+}
+
+function machDeleteRow(i) {
+    if (!confirm(`ลบ ${machineMaster[i].id || ''} ${machineMaster[i].name || ''}?`)) return;
+    machineMaster.splice(i, 1);
+    renderMachTable();
+}
+
+async function saveMachines() {
+    if (userRole !== 'admin') { showToast('⚠️ ต้องเป็น Admin', 'error'); return; }
+    const clean = machineMaster.filter(m => String(m.id).trim());
+    if (!confirm(`บันทึกทะเบียนเครื่องจักรทั้งหมด ${clean.length} รายการ?`)) return;
+    try {
+        const res  = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+            body: JSON.stringify({ action:'setMachines', pw: sessionPw, machines: clean }) });
+        const json = await res.json();
+        if (json && json.success) { showToast(`✅ บันทึก ${json.count} เครื่องจักรแล้ว`, 'success'); machineList=[]; loadMachines(); }
+        else showToast('❌ บันทึกไม่สำเร็จ: ' + (json && json.error || ''), 'error');
+    } catch (e) { showToast('❌ ' + e.message, 'error'); }
+}
+
+// ---------- IMPORT (แยกพื้นที่ + เลือก column + preview + confirm) ----------
+let _impRows = [];   // แถวดิบจากไฟล์ (array ของ array)
+
+function impUpdateArea() {
+    const f = document.getElementById('imp-factory').value;
+    const sel = document.getElementById('imp-area');
+    sel.innerHTML = '<option value="">-- เลือกพื้นที่ --</option>' + (AREA_MAP[f]||[]).map(a=>`<option>${a}</option>`).join('');
+}
+
+async function impReadFile(input) {
+    const file = input.files[0]; if (!file) return;
+    if (typeof XLSX === 'undefined') { showToast('❌ โหลดตัวอ่าน Excel ไม่สำเร็จ', 'error'); return; }
+    try {
+        const wb  = XLSX.read(await file.arrayBuffer(), { type:'array' });
+        _impRows  = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
+        if (!_impRows.length) { showToast('⚠️ ไฟล์ว่าง', 'error'); return; }
+        const head = _impRows[0].map((h,i) => String(h||('คอลัมน์ '+(i+1))));
+        const opts = (def) => head.map((h,i)=>`<option value="${i}" ${i===def?'selected':''}>${String(h).replace(/"/g,'&quot;')}</option>`).join('');
+        const guess = kw => { const j = head.findIndex(h => kw.some(k => String(h).toLowerCase().includes(k))); return j<0?-1:j; };
+        const gId = guess(['รหัส','code','id']), gName = guess(['ชื่อ','name']), gLine = guess(['ไลน์','line','สาย']);
+        document.getElementById('imp-col-id').innerHTML   = opts(gId>=0?gId:0);
+        document.getElementById('imp-col-name').innerHTML = opts(gName>=0?gName:1);
+        document.getElementById('imp-col-line').innerHTML = '<option value="-1">— ไม่มี —</option>' + head.map((h,i)=>`<option value="${i}" ${i===gLine?'selected':''}>${String(h).replace(/"/g,'&quot;')}</option>`).join('');
+        document.getElementById('imp-map').classList.remove('hidden');
+        impPreview();
+    } catch (e) { showToast('❌ อ่านไฟล์ไม่ได้: ' + e.message, 'error'); }
+    finally { input.value=''; }
+}
+
+function impBuild() {
+    const cId = +document.getElementById('imp-col-id').value;
+    const cName = +document.getElementById('imp-col-name').value;
+    const cLine = +document.getElementById('imp-col-line').value;
+    const out = [];
+    for (let i = 1; i < _impRows.length; i++) {
+        const r = _impRows[i], id = String(r[cId]||'').trim();
+        if (!id) continue;
+        out.push({ id, name:String(r[cName]||'').trim(), line: cLine>=0 ? String(r[cLine]||'').trim() : '' });
+    }
+    return out;
+}
+
+function impPreview() {
+    const rows = impBuild();
+    document.getElementById('imp-count').textContent = `${rows.length} เครื่อง`;
+    document.getElementById('imp-preview-body').innerHTML = rows.slice(0, 200).map(m =>
+        `<tr class="border-b border-gray-100"><td class="px-3 py-1">${m.id}</td><td class="px-3 py-1">${m.name||'—'}</td><td class="px-3 py-1">${m.line||'—'}</td></tr>`).join('')
+        || '<tr><td colspan="3" class="text-center text-gray-400 py-4">— ไม่มีข้อมูล —</td></tr>';
+}
+
+function impCancel() {
+    document.getElementById('imp-map').classList.add('hidden');
+    _impRows = [];
+}
+
+function impConfirm() {
+    const fSel = document.getElementById('imp-factory');
+    const factory = fSel.options[fSel.selectedIndex]?.text?.startsWith('--') ? '' : fSel.options[fSel.selectedIndex]?.text || '';
+    const area = document.getElementById('imp-area').value;
+    if (!fSel.value) return showToast('⚠️ เลือกโรงงานของไฟล์', 'error');
+    if (!area)       return showToast('⚠️ เลือกพื้นที่ของไฟล์', 'error');
+    const rows = impBuild();
+    if (!rows.length) return showToast('⚠️ ไม่มีข้อมูลให้นำเข้า', 'error');
+    if (!confirm(`นำเข้า ${rows.length} เครื่องจักร เข้า ${factory} / ${area}?\n(รหัสซ้ำจะถูกอัปเดต)`)) return;
+
+    // upsert ตามรหัส — เพิ่มเข้า machineMaster (ไม่ลบพื้นที่อื่น)
+    const map = new Map(machineMaster.map(m => [String(m.id).toLowerCase(), m]));
+    rows.forEach(r => {
+        const ex = map.get(r.id.toLowerCase());
+        const rec = { id:r.id, name:r.name, factory, area, line:r.line };
+        if (ex) Object.assign(ex, rec);
+        else { machineMaster.unshift(rec); map.set(r.id.toLowerCase(), rec); }
+    });
+    impCancel();
+    document.getElementById('imp-factory').value=''; impUpdateArea();
+    machUpdateFilterArea(); renderMachTable();
+    showToast(`✅ เตรียมนำเข้า ${rows.length} เครื่อง — กด "บันทึกทั้งหมด" เพื่อยืนยันลงระบบ`, 'success');
 }
 
 // ลบเอกสาร (Admin) — server ตรวจรหัสซ้ำอีกชั้น
@@ -1058,6 +1258,7 @@ const PAGE_TITLE = {
     form:    '🚨 แจ้ง Breakdown',
     records: '📋 รายการ Breakdown',
     summary: '📊 สรุปข้อมูล Breakdown',
+    machines:'🛠️ ทะเบียนเครื่องจักร',
 };
 
 // โหมดฟอร์ม: 'report' = กรอกน้อย / 'full' = กรอกครบ
@@ -2441,7 +2642,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v23';
+const EXPORT_VER = 'v24';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
