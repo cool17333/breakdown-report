@@ -116,7 +116,7 @@
         <p class="text-xs text-gray-400 mt-5 pt-5 border-t border-gray-200">🛠️ จัดการ <b>ทะเบียนเครื่องจักร</b> (นำเข้า Excel / เพิ่ม / แก้ไข / ลบ) ได้ที่เมนู "ทะเบียนเครื่องจักร" หน้าแรก (เฉพาะ Admin)</p>
 
         <div class="flex gap-3 justify-end mt-5">
-            <button onclick="closeSettings()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ยกเลิก</button>
+            <button onclick="closeSettings()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ปิด</button>
             <button id="btn-save-url" onclick="saveSettings()" class="hidden px-6 py-2 bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-lg text-sm transition-colors">บันทึก URL</button>
         </div>
     </div>
@@ -2668,7 +2668,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v27';
+const EXPORT_VER = 'v28';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
