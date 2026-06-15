@@ -509,7 +509,7 @@
         </button>
         <button id="btn-savewhy" onclick="saveWhyOnly()"
                 class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-full shadow-lg transition-all transform hover:-translate-y-1 inline-flex items-center text-sm">
-            🌳 <span class="ml-2">บันทึก Why-Why</span>
+            🌳 <span class="ml-2">บันทึก Why-Why / มาตรการ</span>
         </button>
         <button id="btn-cancel-edit" onclick="goHome()"
                 class="hidden bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-4 px-8 rounded-full shadow transition-all text-sm">
@@ -1300,14 +1300,17 @@ function setBdStartLocked(locked) {
     });
 }
 
-const STAGE_NAV = { report:'🚨 แจ้ง Breakdown', edit:'✏️ แก้ไข / ปิดงาน Report', whyedit:'🌳 แก้ไข Why-Why', manual:'✍️ Manual Create' };
+const STAGE_NAV = { report:'🚨 แจ้ง Breakdown', edit:'✏️ แก้ไข / ปิดงาน Report', whyedit:'🌳 แก้ Why-Why / มาตรการ / รูป', manual:'✍️ Manual Create' };
 
-// ล็อกทุกช่องในฟอร์มยกเว้น Why-Why (โหมดแก้ Why-Why หลังปิดงาน)
+// โหมดแก้ Why-Why หลังปิดงาน: ปลดล็อกเฉพาะ Why-Why + มาตรการแก้ไข + มาตรการป้องกัน + รูปก่อน/หลัง
 function lockExceptWhy(on) {
-    const rc  = document.getElementById('report-content');
-    const why = document.getElementById('why-section');
+    const rc = document.getElementById('report-content');
+    const editable = el =>
+        el.closest('#why-section') ||
+        el.id === 'inp-corrective' || el.id === 'inp-preventive' ||
+        el.closest('#photo-box-before') || el.closest('#photo-box-after');
     rc.querySelectorAll('input, textarea, select, button').forEach(el => {
-        el.disabled = (on && !(why && why.contains(el)));
+        el.disabled = (on && !editable(el));
     });
 }
 
@@ -2386,7 +2389,9 @@ function renderRecordsTable(rows) {
         const isAdmin   = (userRole === 'admin');
         const canEdit   = (userRole === 'engineer' || userRole === 'admin');
         const canDelete = isAdmin;
-        const isDone    = !isPending;   // ปิดงานแล้ว → export PDF ได้
+        const isDone    = !isPending;
+        const hasWhy    = Array.isArray(r.whys) ? r.whys.some(w => String(w).trim()) : false;
+        const canPDF    = isDone && (isAdmin || hasWhy);   // PDF เมื่อปิดงาน + (Admin หรือ บันทึก Why-Why แล้ว)
         return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
             <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${date}${r.tracking?`<br><span class="text-gray-400 font-mono text-[10px]">${r.tracking}</span>`:''}</td>
             <td class="px-4 py-3 font-bold text-gray-900 text-sm">${r.machineName||'—'}${r.machineId?`<br><span class="text-gray-400 font-normal text-xs">${r.machineId}</span>`:''}</td>
@@ -2404,7 +2409,7 @@ function renderRecordsTable(rows) {
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-700 transition-colors">🌳 Why-Why</button>` : ''}
                     ${isAdmin ? `<button onclick='openLog(${JSON.stringify(r.tracking||"")})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors">🕑 Log</button>` : ''}
-                    ${isDone ? `<button onclick='exportRowPDF(${j})'
+                    ${canPDF ? `<button onclick='exportRowPDF(${j})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">📄 PDF</button>` : ''}
                     ${canDelete ? `<button onclick='deleteRecord(${j})'
                         class="text-xs font-bold px-2 py-1 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 transition-colors">🗑️ ลบ</button>` : ''}
@@ -2668,7 +2673,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v29';
+const EXPORT_VER = 'v30';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
