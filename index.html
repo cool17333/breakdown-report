@@ -265,10 +265,10 @@
 
     <!-- HEADER -->
     <div class="bg-[#18181b] px-6 md:px-8 py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
+        <div class="flex-1 min-w-0 w-full">
             <p class="text-orange-500 text-xs font-bold uppercase tracking-widest mb-1">🔴 Breakdown Report — Machine · CPRAM CHB</p>
             <input type="text" id="machine-name"
-                   class="block text-2xl md:text-3xl font-bold text-white bg-transparent border-b-2 border-transparent hover:border-gray-600 focus:border-orange-500 outline-none transition-colors p-1 w-72 md:w-[36rem]"
+                   class="block text-xl md:text-2xl font-bold text-white bg-transparent border-b-2 border-transparent hover:border-gray-600 focus:border-orange-500 outline-none transition-colors p-1 w-full"
                    placeholder="ชื่อเครื่องจักร...">
             <p id="tracking-display" class="hidden text-gray-300 text-xs font-bold mt-1.5 ml-1">
                 🔖 เลข Tracking: <span id="tracking-no" class="text-orange-300 font-mono tracking-wider"></span>
@@ -1427,11 +1427,11 @@ function onMachineIdLookup() {
         const match = q ? machineList.filter(x => String(x.id).toLowerCase().includes(q) || String(x.name).toLowerCase().includes(q)) : machineList;
         dl.innerHTML = match.slice(0, 5).map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
     }
-    // autofill เมื่อพิมพ์/เลือกตรงรหัสเป๊ะ
+    // autofill เมื่อพิมพ์/เลือกตรงรหัสเป๊ะ — เติมชื่อ + Line ตามทะเบียน (ทับของเดิม)
     const m = machineList.find(x => String(x.id).toLowerCase() === q);
     if (!m) return;
-    const nameEl = document.getElementById('machine-name'); if (nameEl) nameEl.value = m.name || nameEl.value;
-    const lineEl = document.getElementById('inp-line');     if (lineEl && !lineEl.value) lineEl.value = m.line || '';
+    const nameEl = document.getElementById('machine-name'); if (nameEl && m.name) nameEl.value = m.name;
+    const lineEl = document.getElementById('inp-line');     if (lineEl && m.line) lineEl.value = m.line;
 }
 
 function openReportPopup() {
@@ -2668,7 +2668,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v28';
+const EXPORT_VER = 'v29';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
