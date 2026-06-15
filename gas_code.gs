@@ -218,6 +218,12 @@ function buildRow(data, whys, partsStr, keepTimestamp, now) {
   ];
 }
 
+// รันฟังก์ชันนี้ 1 ครั้งในตัว editor เพื่ออนุญาตสิทธิ์ Google Drive (แก้ error DriveApp ไม่ได้รับอนุญาต)
+function authorizeDrive() {
+  DriveApp.getRootFolder().getName();   // กด Run → Allow สิทธิ์ Drive
+  return 'OK — Drive authorized';
+}
+
 // อัปโหลดรูป (dataURL) ขึ้น Drive → คืน fileId / ถ้าเป็น id เดิมอยู่แล้วก็คืนเดิม
 function saveImgToDrive(val) {
   if (!val || String(val).indexOf('data:') !== 0) return val || '';
