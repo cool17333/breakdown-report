@@ -43,8 +43,9 @@ const HEADERS = [
   'ผู้ดำเนินการล่าสุด',   // index 25
   'ผู้รับงาน',            // index 26
   'ผู้ปิดงาน',            // index 27
-  'รูปก่อนแก้ไข (ID)',    // index 28
+  'รูปก่อนแก้ไข (ID)',    // index 28 (หลายรูปคั่นด้วย |)
   'รูปหลังแก้ไข (ID)',    // index 29
+  'Why-Why Images (JSON)',// index 30
 ];
 
 // ============================================================
@@ -57,8 +58,9 @@ function doPost(e) {
 
     // อัปโหลดรูปขึ้น Drive (เฉพาะตอนสร้าง/แก้ไข) → เก็บเป็น fileId
     if (data.action === 'create' || data.action === 'update' || !data.action) {
-      data.imgBefore = saveImgToDrive(data.imgBefore);
-      data.imgAfter  = saveImgToDrive(data.imgAfter);
+      data.imgBefore = saveImgList(data.imgBefore);   // หลายรูปคั่น |
+      data.imgAfter  = saveImgList(data.imgAfter);
+      data.whyImages = saveWhyImgs(data.whyImages);   // Why-Why images (JSON)
     }
 
     // ---- UPDATE existing row ----
@@ -134,6 +136,11 @@ function doPost(e) {
         return jsonOut({ success: false, error: 'ต้องเป็น Admin เท่านั้น' });
       const sheet = ss.getSheetByName(data.sheetName);
       if (!sheet || !data.rowIndex) throw new Error('Sheet or rowIndex not found');
+      // ลบไฟล์รูปใน Drive ที่ผูกกับเอกสารนี้ (ก่อน/หลัง) ก่อนลบแถว
+      const row = sheet.getRange(data.rowIndex, 1, 1, HEADERS.length).getValues()[0];
+      splitIds(row[28]).forEach(trashDriveFile);
+      splitIds(row[29]).forEach(trashDriveFile);
+      collectWhyImgIds(row[30]).forEach(trashDriveFile);   // Why-Why image ids (JSON) — ถ้ามี
       sheet.deleteRow(data.rowIndex);
       writeLog(ss, data.tracking, 'ลบเอกสาร', data.byName, 'ลบแล้ว');
       return jsonOut({ success: true, action: 'deleted' });
@@ -215,6 +222,7 @@ function buildRow(data, whys, partsStr, keepTimestamp, now) {
     data.closedBy      || '',
     data.imgBefore     || '',
     data.imgAfter      || '',
+    data.whyImages     || '',
   ];
 }
 
@@ -233,6 +241,34 @@ function saveImgToDrive(val) {
   const it = DriveApp.getFoldersByName('BreakdownReport_Images');
   const folder = it.hasNext() ? it.next() : DriveApp.createFolder('BreakdownReport_Images');
   return folder.createFile(blob).getId();
+}
+
+// แยกหลาย fileId (คั่นด้วย |) → array (รองรับ before/after หลายรูป)
+function splitIds(s) { return String(s || '').split('|').map(x => x.trim()).filter(Boolean); }
+
+// แปลงรายการรูป (คั่น |) เป็น id: dataURL→อัปขึ้น Drive, id เดิม→คงไว้
+function saveImgList(val) {
+  return splitIds(val).map(v => saveImgToDrive(v)).filter(Boolean).join('|');
+}
+
+// Why-Why images: JSON { "path": ["dataURL/id", ...] } → อัปรูปใหม่ แล้วคืน JSON ของ fileId
+function saveWhyImgs(json) {
+  let obj; try { obj = JSON.parse(json || '{}'); } catch (e) { return ''; }
+  const out = {};
+  Object.keys(obj).forEach(p => {
+    const ids = (obj[p] || []).map(v => saveImgToDrive(v)).filter(Boolean);
+    if (ids.length) out[p] = ids;
+  });
+  return JSON.stringify(out);
+}
+function collectWhyImgIds(json) {
+  try { return Object.keys(JSON.parse(json || '{}')).reduce((a, p) => a.concat(JSON.parse(json)[p]), []).filter(Boolean); }
+  catch (e) { return []; }
+}
+
+function trashDriveFile(id) {
+  if (!id) return;
+  try { DriveApp.getFileById(String(id)).setTrashed(true); } catch (e) {}
 }
 
 // ดึงรูปจาก Drive กลับมาเป็น dataURL (สำหรับแสดง/ใส่ PDF)
@@ -397,6 +433,7 @@ function doGetAll(factory, area, status, month, machineId) {
         closedBy:    r[27] || '',
         imgBefore:   r[28] || '',
         imgAfter:    r[29] || '',
+        whyImages:   r[30] || '',
       });
     }
   });
