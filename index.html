@@ -380,29 +380,31 @@
             </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <!-- BEFORE -->
+            <!-- BEFORE (หลายรูป — รูปที่โชว์ = รูปแรก, ที่เหลือไปหน้า gallery) -->
             <div class="flex flex-col">
-                <div id="photo-box-before" class="relative border-2 border-dashed border-red-300 hover:border-red-500 rounded-xl bg-red-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors flex-1" style="min-height:13rem;">
+                <div id="photo-box-before" class="relative border-2 border-dashed border-red-300 hover:border-red-500 rounded-xl bg-red-50/40 flex items-center justify-center overflow-hidden group transition-colors flex-1" style="min-height:11rem;">
                     <div class="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md z-10">ก่อนแก้ไข</div>
-                    <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="setImage(event,'before')">
+                    <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="addImage(event,'before')">
                     <img id="preview-before" class="absolute inset-0 w-full h-full object-contain bg-white hidden">
                     <div id="prompt-before" class="text-red-300 group-hover:text-red-500 text-center flex flex-col items-center pointer-events-none">
                         <svg class="w-8 h-8 mb-2 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        <span class="text-xs font-semibold">คลิกเพื่ออัปโหลด</span>
+                        <span class="text-xs font-semibold">คลิกเพื่อเพิ่มรูป</span>
                     </div>
                 </div>
+                <div id="thumbs-before" class="flex gap-1.5 flex-wrap mt-2 no-export"></div>
             </div>
-            <!-- AFTER -->
+            <!-- AFTER (หลายรูป) -->
             <div class="flex flex-col stage-fix">
-                <div id="photo-box-after" class="relative border-2 border-dashed border-green-300 hover:border-green-500 rounded-xl bg-green-50/40 flex flex-col items-center justify-center overflow-hidden group transition-colors flex-1" style="min-height:13rem;">
+                <div id="photo-box-after" class="relative border-2 border-dashed border-green-300 hover:border-green-500 rounded-xl bg-green-50/40 flex items-center justify-center overflow-hidden group transition-colors flex-1" style="min-height:11rem;">
                     <div class="absolute top-3 left-3 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow-md z-10">หลังแก้ไข</div>
-                    <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="setImage(event,'after')">
+                    <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*" onchange="addImage(event,'after')">
                     <img id="preview-after" class="absolute inset-0 w-full h-full object-contain bg-white hidden">
                     <div id="prompt-after" class="text-green-300 group-hover:text-green-500 text-center flex flex-col items-center pointer-events-none">
                         <svg class="w-8 h-8 mb-2 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        <span class="text-xs font-semibold">คลิกเพื่ออัปโหลด</span>
+                        <span class="text-xs font-semibold">คลิกเพื่อเพิ่มรูป</span>
                     </div>
                 </div>
+                <div id="thumbs-after" class="flex gap-1.5 flex-wrap mt-2 no-export"></div>
             </div>
         </div>
     </div>
@@ -1309,7 +1311,8 @@ function lockExceptWhy(on) {
     const editable = el =>
         el.closest('#why-section') ||
         el.id === 'inp-corrective' || el.id === 'inp-preventive' ||
-        el.closest('#photo-box-before') || el.closest('#photo-box-after');
+        el.closest('#photo-box-before') || el.closest('#photo-box-after') ||
+        el.closest('#thumbs-before')   || el.closest('#thumbs-after');
     rc.querySelectorAll('input, textarea, select, button').forEach(el => {
         el.disabled = (on && !editable(el));
     });
@@ -1443,7 +1446,7 @@ function openReportPopup() {
     rmUpdateArea();
     ['rm-machine','rm-line','rm-date','rm-time','rm-problem'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('rm-byname').value = '';   // ว่างทุกครั้ง — กันใส่ชื่อซ้ำคนเดิม
-    imgStore.before = null; imgRef.before = '';
+    imgList.before = []; imgList.after = [];
     document.getElementById('rm-preview').classList.add('hidden');
     document.getElementById('rm-photo-hint').classList.remove('hidden');
     document.getElementById('report-modal').classList.remove('hidden');
@@ -1464,7 +1467,7 @@ function rmSetImage(event) {
     const file = event.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = () => compressImage(reader.result, d => {
-        imgStore.before = d; imgRef.before = '';
+        imgList.before = [{ data: d, id: '' }];
         const img = document.getElementById('rm-preview');
         img.src = d; img.classList.remove('hidden');
         document.getElementById('rm-photo-hint').classList.add('hidden');
@@ -1499,7 +1502,7 @@ async function submitReportPopup() {
         status: 'แจ้ง Breakdown', bdStart: `${date}T${time || '00:00'}`, bdEnd: '', downtimeMin: 0,
         bdType: '', problem, device: '', whys: [''],
         corrective: '', preventive: '', parts: [], byName, action: 'create',
-        imgBefore: imgStore.before || '', imgAfter: '',   // รูปก่อน (จาก popup) → อัปขึ้น Drive
+        imgBefore: imgsToStr('before'), imgAfter: '',   // รูปก่อน (จาก popup) → อัปขึ้น Drive
     };
 
     const btn = document.getElementById('rm-submit');
@@ -1747,8 +1750,10 @@ function addWhyImages(node) {
         files.forEach(f => {
             const r = new FileReader();
             r.onload = () => {
-                (node.images = node.images || []).push(r.result);
-                if (--pending === 0) renderWhyTree();
+                compressImage(r.result, d => {
+                    (node.images = node.images || []).push({ data: d, id: '' });
+                    if (--pending === 0) renderWhyTree();
+                });
             };
             r.readAsDataURL(f);
         });
@@ -1819,11 +1824,11 @@ function _renderWhyNode(node, label) {
         const tr = document.createElement('div');
         tr.className = 'no-print flex flex-wrap gap-1.5 mb-2';
         tr.style.marginLeft = '8px';
-        node.images.forEach((src, i) => {
+        node.images.forEach((im, i) => {
             const cell = document.createElement('div');
             cell.className = 'relative w-16 h-12 rounded-lg overflow-hidden border border-gray-200';
             cell.innerHTML = `
-                <img src="${src}" class="w-full h-full object-cover">
+                <img src="${im.data}" class="w-full h-full object-cover">
                 <button type="button" class="absolute top-0 right-0 bg-black/60 hover:bg-red-600 text-white w-4 h-4 flex items-center justify-center text-xs leading-none rounded-bl">×</button>`;
             cell.querySelector('button').onclick = () => removeWhyImage(node, i);
             tr.appendChild(cell);
@@ -1850,6 +1855,38 @@ function serializeWhyTree() {
     };
     whyTree.forEach((n, i) => walk(n, String(i + 1)));
     return lines.filter(l => l.split('\t')[1]).length ? lines.join('\n') : '';
+}
+
+// รวมรูป Why-Why เป็น { path: [id/dataURL] } สำหรับบันทึก (id เดิม / dataURL ใหม่)
+function buildWhyImages() {
+    const out = {};
+    const walk = (node, label) => {
+        if (node.images && node.images.length) out[label] = node.images.map(im => im.id || im.data);
+        node.children.forEach((ch, j) => walk(ch, label + '.' + (j + 1)));
+    };
+    whyTree.forEach((n, i) => walk(n, String(i + 1)));
+    return out;
+}
+
+// โหลดรูป Why-Why จาก Drive (JSON { path:[id] }) → ผูกกลับเข้า tree ตาม path
+async function loadWhyImages(jsonStr) {
+    let map; try { map = JSON.parse(jsonStr || '{}'); } catch (e) { return; }
+    if (!map || !Object.keys(map).length) return;
+    const nodeByLabel = {};
+    const walk = (node, label) => { nodeByLabel[label] = node; node.children.forEach((ch, j) => walk(ch, label + '.' + (j + 1))); };
+    whyTree.forEach((n, i) => walk(n, String(i + 1)));
+    for (const label of Object.keys(map)) {
+        const node = nodeByLabel[label]; if (!node) continue;
+        node.images = [];
+        for (const id of map[label]) {
+            try {
+                const res  = await fetch(`${GAS_URL}?action=getImage&id=${encodeURIComponent(id)}`);
+                const json = await res.json();
+                if (json && json.success && json.dataUrl) node.images.push({ data: json.dataUrl, id });
+            } catch (e) { /* เงียบ */ }
+        }
+    }
+    renderWhyTree();
 }
 
 function parseWhyTree(text) {
@@ -1939,8 +1976,8 @@ function removePartRow(btn) {
 // ============================================================
 // PHOTOS — ก่อน/หลังแก้ไข (รูปเดียวต่อช่อง)
 // ============================================================
-const imgStore = { before: null, after: null };   // dataURL สำหรับแสดง
-const imgRef   = { before: '',   after: '' };      // Drive fileId (ถ้าเป็นรูปที่บันทึกแล้ว / '' = รูปใหม่)
+// รูปหลายรูปต่อข้าง — [{data:dataURL, id:fileId}] ; รูปแรก (index 0) = รูปที่โชว์ในกรอบ
+const imgList = { before: [], after: [] };
 let _imgLoadPromise = Promise.resolve();           // รอโหลดรูปจาก Drive ก่อน export
 
 // ย่อรูปก่อนเก็บ (กว้าง/สูงไม่เกิน 1280px, JPEG) — ลดขนาดอัปโหลด/เก็บ Drive
@@ -1958,44 +1995,64 @@ function compressImage(dataUrl, cb) {
     img.src = dataUrl;
 }
 
-function setImage(event, side) {
+function addImage(event, side) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => compressImage(reader.result, d => { imgStore[side] = d; imgRef[side] = ''; renderImageSide(side); });
+    reader.onload = () => compressImage(reader.result, d => { imgList[side].push({ data: d, id: '' }); renderImageSide(side); });
     reader.readAsDataURL(file);
     event.target.value = '';   // เผื่อเลือกไฟล์เดิมซ้ำ
 }
 
-// ดึงรูปจาก Drive (fileId) → แสดง
-async function loadImageFromDrive(fileId, side) {
-    if (!fileId || !GAS_URL) return;
-    try {
-        const res  = await fetch(`${GAS_URL}?action=getImage&id=${encodeURIComponent(fileId)}`);
-        const json = await res.json();
-        if (json && json.success && json.dataUrl) { imgStore[side] = json.dataUrl; imgRef[side] = fileId; renderImageSide(side); }
-    } catch (e) { /* เงียบ */ }
+function setPrimary(side, idx) {
+    if (idx <= 0 || idx >= imgList[side].length) return;
+    const [it] = imgList[side].splice(idx, 1);
+    imgList[side].unshift(it);
+    renderImageSide(side);
+}
+
+function delImage(side, idx) {
+    imgList[side].splice(idx, 1);
+    renderImageSide(side);
+}
+
+// โหลดรูปทั้งหมดของข้างหนึ่งจาก Drive (id คั่นด้วย |) ตามลำดับ
+async function loadImagesForSide(idsStr, side) {
+    const ids = String(idsStr || '').split('|').map(s => s.trim()).filter(Boolean);
+    for (const id of ids) {
+        try {
+            const res  = await fetch(`${GAS_URL}?action=getImage&id=${encodeURIComponent(id)}`);
+            const json = await res.json();
+            if (json && json.success && json.dataUrl) imgList[side].push({ data: json.dataUrl, id });
+        } catch (e) { /* เงียบ */ }
+    }
+    renderImageSide(side);
 }
 
 function renderImageSide(side) {
+    const list = imgList[side];
     const img    = document.getElementById('preview-' + side);
     const prompt = document.getElementById('prompt-' + side);
-    if (imgStore[side]) {
-        img.src = imgStore[side];
-        img.classList.remove('hidden');
-        prompt?.classList.add('hidden');
-    } else {
-        img.src = '';
-        img.classList.add('hidden');
-        prompt?.classList.remove('hidden');
-    }
+    if (list.length) { img.src = list[0].data; img.classList.remove('hidden'); prompt?.classList.add('hidden'); }
+    else             { img.src = ''; img.classList.add('hidden'); prompt?.classList.remove('hidden'); }
+
+    const tw = document.getElementById('thumbs-' + side);
+    if (tw) tw.innerHTML = list.map((it, i) => `
+        <div class="relative w-12 h-12 rounded border-2 ${i === 0 ? 'border-orange-500' : 'border-gray-200'} overflow-hidden cursor-pointer"
+             onclick="setPrimary('${side}',${i})" title="${i === 0 ? 'รูปที่โชว์ในรายงาน' : 'คลิกเพื่อตั้งเป็นรูปโชว์'}">
+            <img src="${it.data}" class="w-full h-full object-cover">
+            ${i === 0 ? '<span class="absolute bottom-0 inset-x-0 bg-orange-500 text-white text-[8px] text-center leading-tight">โชว์</span>' : ''}
+            <button onclick="event.stopPropagation();delImage('${side}',${i})" class="absolute top-0 right-0 bg-black/50 hover:bg-red-600 text-white text-[10px] leading-none w-4 h-4 rounded-bl">×</button>
+        </div>`).join('');
 }
 
 function resetImages() {
-    imgStore.before = null; imgStore.after = null;
-    imgRef.before = '';     imgRef.after = '';
+    imgList.before = []; imgList.after = [];
     renderImageSide('before'); renderImageSide('after');
 }
+
+// รวมรูปทุกข้างเป็น string id|id (สำหรับส่งบันทึก)
+function imgsToStr(side) { return imgList[side].map(x => x.id || x.data).join('|'); }
 
 // ============================================================
 // GALLERY PAGE — รูปประกอบ Why-Why (หน้า 2 ของ export)
@@ -2006,7 +2063,7 @@ function hasWhyImages() {
 }
 
 function hasGalleryContent() {
-    return !!imgStore.before || !!imgStore.after || hasWhyImages();
+    return imgList.before.length || imgList.after.length || hasWhyImages();
 }
 
 function buildGallery(mode = 'pdf') {
@@ -2045,20 +2102,20 @@ function buildGallery(mode = 'pdf') {
     const RED   = { border:'#fca5a5', bg:'#fef2f2', badgeBg:'#dc2626', badgeTx:'#ffffff', badgeBd:'#dc2626' };
     const GREEN = { border:'#86efac', bg:'#f0fdf4', badgeBg:'#16a34a', badgeTx:'#ffffff', badgeBd:'#16a34a' };
 
-    // ---- รูปก่อน/หลังแก้ไข (มาก่อน why-why) ----
-    if (imgStore.before || imgStore.after) {
+    // ---- รูปก่อน/หลังแก้ไข (ครบทุกรูป — มาก่อน why-why) ----
+    if (imgList.before.length || imgList.after.length) {
         const row = document.createElement('div');
         row.className = 'gal-sec';
         row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start';
-        const half = (color, badge, src) => {
+        const half = (color, badge, list) => {
             const f = mkFrame(color, badge, '');
             f.classList.remove('gal-sec');           // row เป็น section เดียว
-            if (src) f.appendChild(mkImgCell(src));
+            if (list.length) list.forEach((it, i) => { const cell = mkImgCell(it.data); if (i) cell.style.marginTop = '12px'; f.appendChild(cell); });
             else f.insertAdjacentHTML('beforeend', '<p style="text-align:center;color:#9ca3af;font-size:13px;padding:24px">— ไม่มีรูป —</p>');
             return f;
         };
-        row.appendChild(half(RED,   'ก่อนแก้ไข', imgStore.before));
-        row.appendChild(half(GREEN, 'หลังแก้ไข', imgStore.after));
+        row.appendChild(half(RED,   'ก่อนแก้ไข', imgList.before));
+        row.appendChild(half(GREEN, 'หลังแก้ไข', imgList.after));
         wrap.appendChild(row);
     }
 
@@ -2077,7 +2134,7 @@ function buildGallery(mode = 'pdf') {
         const frame = mkFrame(color, 'Why ' + sec.label, sec.text);
         const grid = document.createElement('div');
         grid.style.cssText = `display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:14px`;
-        sec.images.forEach(src => grid.appendChild(mkImgCell(src)));
+        sec.images.forEach(im => grid.appendChild(mkImgCell(im.data)));
         frame.appendChild(grid);
         wrap.appendChild(frame);
     });
@@ -2126,8 +2183,9 @@ function collectFormData() {
         corrective:  g('inp-corrective'),
         preventive:  g('inp-preventive'),
         parts,
-        imgBefore:   imgRef.before ? imgRef.before : (imgStore.before || ''),   // id เดิม หรือ dataURL ใหม่
-        imgAfter:    imgRef.after  ? imgRef.after  : (imgStore.after  || ''),
+        imgBefore:   imgsToStr('before'),   // id|id (รูปแรก=โชว์)
+        imgAfter:    imgsToStr('after'),
+        whyImages:   JSON.stringify(buildWhyImages()),   // รูป Why-Why → Drive
     };
 }
 
@@ -2317,8 +2375,9 @@ function openEditMode(item, stage = 'edit') {
     // ดึงรูปก่อน/หลังจาก Drive (ถ้ามี) — เก็บ promise ไว้ให้ export รอ
     resetImages();
     _imgLoadPromise = Promise.all([
-        loadImageFromDrive(item.imgBefore, 'before'),
-        loadImageFromDrive(item.imgAfter,  'after'),
+        loadImagesForSide(item.imgBefore, 'before'),
+        loadImagesForSide(item.imgAfter,  'after'),
+        loadWhyImages(item.whyImages),
     ]);
 
     calcDowntime();
