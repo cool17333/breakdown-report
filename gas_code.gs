@@ -46,6 +46,8 @@ const HEADERS = [
   'รูปก่อนแก้ไข (ID)',    // index 28 (หลายรูปคั่นด้วย |)
   'รูปหลังแก้ไข (ID)',    // index 29
   'Why-Why Images (JSON)',// index 30
+  'ประเภทเหตุการณ์',     // index 31 (Breakdown / Adjustment)
+  'เหตุผลยกเลิก',        // index 32
 ];
 
 // ============================================================
@@ -128,6 +130,18 @@ function doPost(e) {
       const cur = bak.getDataRange().getValues();
       sh.getRange(1, 1, cur.length, cur[0].length).setValues(cur);
       return jsonOut({ success: true, count: cur.length - 1 });
+    }
+
+    // ---- CANCEL record (เปลี่ยนสถานะเป็น "ยกเลิกงาน" — Admin เท่านั้น) ----
+    if (data.action === 'cancel') {
+      if (ROLE_PW[(data.pw || '').trim()] !== 'admin')
+        return jsonOut({ success: false, error: 'ต้องเป็น Admin เท่านั้น' });
+      const sheet = ss.getSheetByName(data.sheetName);
+      if (!sheet || !data.rowIndex) throw new Error('Sheet or rowIndex not found');
+      sheet.getRange(data.rowIndex, 7).setValue('ยกเลิกงาน');           // col 7 = สถานะ
+      sheet.getRange(data.rowIndex, 33).setValue(data.cancelReason || ''); // col 33 = เหตุผลยกเลิก
+      writeLog(ss, data.tracking, 'ยกเลิกงาน — ' + (data.cancelReason || ''), data.byName, 'ยกเลิกงาน');
+      return jsonOut({ success: true, action: 'cancelled' });
     }
 
     // ---- DELETE row (Admin เท่านั้น — เช็ครหัสฝั่ง server) ----
@@ -223,6 +237,8 @@ function buildRow(data, whys, partsStr, keepTimestamp, now) {
     data.imgBefore     || '',
     data.imgAfter      || '',
     data.whyImages     || '',
+    data.eventType     || '',
+    data.cancelReason  || '',
   ];
 }
 
@@ -431,9 +447,11 @@ function doGetAll(factory, area, status, month, machineId) {
         byName:      r[25] || '',
         acceptedBy:  r[26] || '',
         closedBy:    r[27] || '',
-        imgBefore:   r[28] || '',
-        imgAfter:    r[29] || '',
-        whyImages:   r[30] || '',
+        imgBefore:    r[28] || '',
+        imgAfter:     r[29] || '',
+        whyImages:    r[30] || '',
+        eventType:    r[31] || '',
+        cancelReason: r[32] || '',
       });
     }
   });
