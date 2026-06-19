@@ -2905,10 +2905,11 @@ function initPDFCards() {
 }
 
 async function doExportPDF() {
+    const rowItem = _pdfPickerForRow;   // บันทึกก่อน closePDFPicker จะ null ทิ้ง
     closePDFPicker();
     const fmt  = document.querySelector('input[name="pdf-fmt"]:checked')?.value || 'landscape';
-    if (_pdfPickerForRow) {
-        openEditMode(_pdfPickerForRow);
+    if (rowItem) {
+        openEditMode(rowItem);
         setTimeout(() => exportPDF(fmt), 450);
     } else {
         exportPDF(fmt);
