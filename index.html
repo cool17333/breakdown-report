@@ -993,13 +993,14 @@
 // ============================================================
 // SETTINGS — Google Apps Script
 // ============================================================
-const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxVoQtqPXKZyfnFDHbX9pitVa6qU2hxTworUIeZiV7IOlhMeLsfWXgTNxohyfO5eQFO/exec';
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwI_GPtgmDwEN55_LCQxeScZd1whjDo-mHW2WTQGfs-estHqCCPGzEIY1zV-7kcyGv3QA/exec';
 // URL เก่าที่เลิกใช้ — ถ้าเครื่องไหนเคยบันทึกไว้ จะล้างทิ้งอัตโนมัติให้ใช้ default ใหม่
 const OLD_GAS_URLS = [
     'https://script.google.com/macros/s/AKfycbwgIYTDjLQbz4vDwKETE8Ve4iO68Q4_4RpRgj7m8vAcwHzrZX5f5CqjMm5DImrsr-Uf/exec',
     'https://script.google.com/macros/s/AKfycbxrGn-BZiRJd13FMivyx1X74naNTNgziQ5AGxIeZnTlC2c0zkJKDZRiqhAir4z7nNBj/exec',
     'https://script.google.com/macros/s/AKfycbwT8usxUrtvB2qJ9GHxn9nROeF-VEtVY_NFMnjhE1Z_8SdVabfd4UqoNys96YCYA28l/exec',
     'https://script.google.com/macros/s/AKfycby7U16rMXa3Dp64vYTFREvk2Nue_iy297easac9DZmhda6aGiouTCV-PWfgc3uJB0lL/exec',
+    'https://script.google.com/macros/s/AKfycbxVoQtqPXKZyfnFDHbX9pitVa6qU2hxTworUIeZiV7IOlhMeLsfWXgTNxohyfO5eQFO/exec',
 ];
 (function migrateGasUrl() {
     const saved = localStorage.getItem('gas_url');
