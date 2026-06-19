@@ -1529,7 +1529,7 @@ async function confirmAccept() {
                 rowIndex:  item.rowIndex,
                 tracking:  item.tracking,
                 acceptedBy,
-                pw: userPw,
+                pw: sessionPw,
             }),
         });
         showToast('✅ รับงานเรียบร้อย — ' + acceptedBy, 'success');
