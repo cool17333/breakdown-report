@@ -2952,7 +2952,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v41';
+const EXPORT_VER = 'v42';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
@@ -3245,8 +3245,30 @@ async function exportPDF(fmt = 'portrait') {
                 holder.remove();
                 return cv;
             };
-            // ทุก section = 1 หน้า (ย่อให้พอดี) → รูปทุกอันของ Why เดียวกันอยู่หน้าเดียวกัน
-            const addSection = async (sec) => { addFitOnePage(await captureSection(sec)); };
+            // เรียง section ต่อกันในหน้าเดียวถ้าพื้นที่เหลือพอ ถ้าไม่พอ → ขึ้นหน้าใหม่ (section ไม่ถูกหั่น)
+            const GAP   = 16;
+            const botY  = M + availH;
+            let cursorY = null;   // null = ยังไม่เปิดหน้า gallery
+            const placeSection = (cv) => {
+                const renderH = availW * cv.height / cv.width;
+                const img = cv.toDataURL('image/jpeg', 0.85);
+                if (renderH > availH) {                             // สูงเกิน 1 หน้า → ย่อพอดีหน้าเดี่ยว
+                    pdf.addPage('a4', 'portrait');
+                    const dH = availH, dW = dH * cv.width / cv.height;
+                    pdf.addImage(img, 'JPEG', (pageW - dW) / 2, M, dW, dH);
+                    cursorY = botY;
+                    return;
+                }
+                if (cursorY === null || cursorY + GAP + renderH > botY) {   // ที่ไม่พอ → หน้าใหม่
+                    pdf.addPage('a4', 'portrait');
+                    cursorY = M;
+                } else {
+                    cursorY += GAP;
+                }
+                pdf.addImage(img, 'JPEG', M, cursorY, availW, renderH);
+                cursorY += renderH;
+            };
+            const addSection = async (sec) => placeSection(await captureSection(sec));
 
             addFitOnePage(mainCanvas);
 
