@@ -319,7 +319,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div>
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">โรงงาน (Factory)</label>
-            <select id="factory-select" onchange="updateAreaOptions()"
+            <select id="factory-select" onchange="updateAreaOptions();clearMachineIdFields()"
                     class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
                 <option value="">-- เลือกโรงงาน --</option>
                 <option value="1">โรงงาน 1</option>
@@ -328,7 +328,7 @@
         </div>
         <div>
             <label class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-1">พื้นที่ (Area)</label>
-            <select id="area-select" onchange="refreshMachineIdHints()"
+            <select id="area-select" onchange="clearMachineIdFields();refilterMachineIdHints()"
                     class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500 transition-colors cursor-pointer text-gray-800">
                 <option value="">-- เลือกโรงงานก่อน --</option>
             </select>
@@ -1567,9 +1567,7 @@ async function loadMachines() {
         const res  = await fetch(`${GAS_URL}?action=getMachines`);
         const json = await res.json();
         machineList = json.data || [];
-        const esc = s => String(s || '').replace(/"/g, '&quot;');
-        const idDl = document.getElementById('machine-id-list');
-        if (idDl) idDl.innerHTML = machineList.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+        refilterMachineIdHints();   // เคารพ scope โรงงาน/พื้นที่ที่เลือกอยู่ (กัน clobber ทับ filtered list)
         const nameDl = document.getElementById('machine-name-list');
         if (nameDl) nameDl.innerHTML = [...new Set(machineList.map(m => m.name).filter(Boolean))].map(n => `<option value="${esc(n)}"></option>`).join('');
     } catch (e) { /* เงียบ — กรอกเองได้ */ }
@@ -1586,16 +1584,19 @@ function machinesForCurrentScope() {
         (!area || m.area    === area));
 }
 
-// รีเฟรช datalist รหัสเมื่อเปลี่ยนโรงงาน/พื้นที่ + ล้างรหัสเก่า
-function refreshMachineIdHints() {
-    document.getElementById('inp-machine-id').value = '';
-    document.getElementById('machine-name').value   = '';
-    document.getElementById('inp-line').value       = '';
+// เติม datalist รหัสตาม scope ปัจจุบัน — ไม่ล้างฟิลด์ (ปลอดภัยเรียกได้ทุกที่รวมถึง loadMachines)
+function refilterMachineIdHints() {
     const dl = document.getElementById('machine-id-list');
     if (!dl) return;
     const esc   = s => String(s || '').replace(/"/g, '&quot;');
     const scope = machinesForCurrentScope();
     dl.innerHTML = scope.slice(0, 5).map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+}
+// ล้างรหัส/ชื่อ/สาย — เรียกเฉพาะตอน user เปลี่ยนโรงงาน/พื้นที่เอง
+function clearMachineIdFields() {
+    ['inp-machine-id', 'machine-name', 'inp-line'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
 }
 
 // ฟอร์มเต็ม (รับงาน/ปิดงาน): พิมพ์/เลือกรหัส → hint 5 ตัว + autofill ชื่อเครื่อง (อิงโรงงาน+พื้นที่)
@@ -1803,14 +1804,14 @@ function updateAreaOptions() {
     const factory = document.getElementById('factory-select').value;
     const sel = document.getElementById('area-select');
     sel.innerHTML = '';
-    if (!factory) { sel.innerHTML = '<option value="">-- เลือกโรงงานก่อน --</option>'; refreshMachineIdHints(); return; }
+    if (!factory) { sel.innerHTML = '<option value="">-- เลือกโรงงานก่อน --</option>'; refilterMachineIdHints(); return; }
     sel.innerHTML = '<option value="">-- เลือกพื้นที่ --</option>';
     (AREA_MAP[factory] || []).forEach(a => {
         const o = document.createElement('option');
         o.value = o.textContent = a;
         sel.appendChild(o);
     });
-    refreshMachineIdHints();
+    refilterMachineIdHints();
 }
 
 // SUMMARY AREA FILTER
@@ -2975,7 +2976,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v43';
+const EXPORT_VER = 'v44';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
