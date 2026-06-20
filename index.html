@@ -2026,17 +2026,15 @@ async function loadWhyImages(jsonStr) {
     const nodeByLabel = {};
     const walk = (node, label) => { nodeByLabel[label] = node; node.children.forEach((ch, j) => walk(ch, label + '.' + (j + 1))); };
     whyTree.forEach((n, i) => walk(n, String(i + 1)));
-    for (const label of Object.keys(map)) {
-        const node = nodeByLabel[label]; if (!node) continue;
-        node.images = [];
-        for (const id of map[label]) {
-            try {
-                const res  = await fetch(`${GAS_URL}?action=getImage&id=${encodeURIComponent(id)}`);
-                const json = await res.json();
-                if (json && json.success && json.dataUrl) node.images.push({ data: json.dataUrl, id });
-            } catch (e) { /* เงียบ */ }
-        }
-    }
+    await Promise.all(Object.keys(map).map(async label => {
+        const node = nodeByLabel[label]; if (!node) return;
+        const results = await Promise.allSettled(map[label].map(async id => {
+            const res  = await fetch(`${GAS_URL}?action=getImage&id=${encodeURIComponent(id)}`);
+            const json = await res.json();
+            return (json && json.success && json.dataUrl) ? { data: json.dataUrl, id } : null;
+        }));
+        node.images = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+    }));
     renderWhyTree();
 }
 
@@ -2170,13 +2168,12 @@ function delImage(side, idx) {
 // โหลดรูปทั้งหมดของข้างหนึ่งจาก Drive (id คั่นด้วย |) ตามลำดับ
 async function loadImagesForSide(idsStr, side) {
     const ids = String(idsStr || '').split('|').map(s => s.trim()).filter(Boolean);
-    for (const id of ids) {
-        try {
-            const res  = await fetch(`${GAS_URL}?action=getImage&id=${encodeURIComponent(id)}`);
-            const json = await res.json();
-            if (json && json.success && json.dataUrl) imgList[side].push({ data: json.dataUrl, id });
-        } catch (e) { /* เงียบ */ }
-    }
+    const results = await Promise.allSettled(ids.map(async id => {
+        const res  = await fetch(`${GAS_URL}?action=getImage&id=${encodeURIComponent(id)}`);
+        const json = await res.json();
+        return (json && json.success && json.dataUrl) ? { data: json.dataUrl, id } : null;
+    }));
+    results.forEach(r => { if (r.status === 'fulfilled' && r.value) imgList[side].push(r.value); });
     renderImageSide(side);
 }
 
@@ -2953,7 +2950,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v39';
+const EXPORT_VER = 'v40';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
@@ -3195,32 +3192,20 @@ async function exportPDF(fmt = 'portrait') {
         // ---------- หน้า 1: ฟอร์ม ----------
         const mainCanvas = await _captureNode(document.getElementById('report-content'), CAP_W);
 
-        // ---------- หน้า 2: รูปภาพทั้งหมด (ถ้ามี) ----------
-        let galCanvas = null;
-        let galSecs   = [];   // ขอบเขต y (px ใน canvas) ของแต่ละกรอบ — ใช้แบ่งหน้าไม่ผ่ากรอบ
-        if (withGallery) {
-            buildGallery(isPNG ? 'png' : 'pdf');
-            const gal = document.getElementById('photo-gallery');
-            gal.style.display = 'block';
-            galCanvas = await _captureNode(gal, CAP_W, (wrapper) => {
-                const wTop = wrapper.getBoundingClientRect().top;
-                galSecs = [...wrapper.querySelectorAll('.gal-sec')].map(s => {
-                    const r = s.getBoundingClientRect();
-                    return { top: (r.top - wTop) * 2, bottom: (r.bottom - wTop) * 2 };  // scale 2
-                });
-            });
-            gal.style.display = 'none';
-        }
-
         if (isPNG) {
-            // ===== PNG =====
+            // ===== PNG — ฟอร์ม + gallery รวม canvas เดียว (เดิม) =====
             _download(mainCanvas.toDataURL('image/png'), `BD_${name}.png`);
-            if (galCanvas) {
-                await new Promise(r => setTimeout(r, 400)); // กัน browser บล็อก download ซ้อน
+            if (withGallery) {
+                buildGallery('png');
+                const gal = document.getElementById('photo-gallery');
+                gal.style.display = 'block';
+                const galCanvas = await _captureNode(gal, CAP_W);
+                gal.style.display = 'none';
+                await new Promise(r => setTimeout(r, 400));
                 _download(galCanvas.toDataURL('image/png'), `BD_${name}_รูปภาพ.png`);
             }
         } else {
-            // ===== PDF — A4 มาตรฐาน (ทุก viewer แสดงเหมือนกัน) =====
+            // ===== PDF — A4 มาตรฐาน =====
             const { jsPDF } = window.jspdf;
             const M = 18;
             const pdf = new jsPDF({ unit:'pt', format:'a4', orientation:'portrait' });
@@ -3230,13 +3215,12 @@ async function exportPDF(fmt = 'portrait') {
             const availH = pageH - M * 2;
             let firstPage = true;
 
-            // ฟอร์ม → ย่อให้พอดี 1 หน้า A4 (เต็มความกว้าง ชิดบน)
             const addFitOnePage = (canvas) => {
                 if (!firstPage) pdf.addPage('a4', 'portrait');
                 firstPage = false;
                 let dW = availW, dH = dW / (canvas.width / canvas.height);
                 if (dH > availH) { dH = availH; dW = dH * (canvas.width / canvas.height); }
-                pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', (pageW - dW) / 2, M, dW, dH);
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', (pageW - dW) / 2, M, dW, dH);
             };
 
             const addSlice = (canvas, sy, sh, pxPerPt) => {
@@ -3245,38 +3229,32 @@ async function exportPDF(fmt = 'portrait') {
                 const tmp = document.createElement('canvas');
                 tmp.width = canvas.width; tmp.height = sh;
                 tmp.getContext('2d').drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
-                pdf.addImage(tmp.toDataURL('image/jpeg', 0.95), 'JPEG', M, M, availW, sh / pxPerPt);
+                pdf.addImage(tmp.toDataURL('image/jpeg', 0.85), 'JPEG', M, M, availW, sh / pxPerPt);
             };
 
-            // แบ่งหน้าตามขอบกรอบ (.gal-sec) — ทั้งกรอบอยู่หน้าเดียวกัน
-            // ถ้ากรอบไม่พอที่เหลือ → ขึ้นหน้าใหม่ / กรอบเดียวสูงเกิน 1 หน้า → ตัดตามจำเป็น
-            const addBySections = (canvas, secs) => {
-                const pxPerPt  = canvas.width / availW;
+            // gallery: จับทีละ .gal-sec → canvas เล็กๆ ไม่ชนลิมิต browser
+            const addSection = async (sec) => {
+                const cv = await _captureNode(sec, CAP_W);
+                const pxPerPt  = cv.width / availW;
                 const sliceHpx = Math.floor(availH * pxPerPt);
-                if (!secs.length) { addSlice(canvas, 0, Math.min(canvas.height, sliceHpx), pxPerPt); return; }
-
-                let pageStart = 0;                              // เริ่มหน้าแรกที่ 0 (รวม header ดำ)
-                let lastFit   = null;
-                const flush = (endY) => { addSlice(canvas, pageStart, endY - pageStart, pxPerPt); pageStart = endY; };
-
-                secs.forEach(sec => {
-                    if (sec.bottom - pageStart <= sliceHpx) { lastFit = sec.bottom; return; }
-                    // กรอบนี้ไม่พอหน้า → ปิดหน้าที่ขอบกรอบก่อนหน้า แล้วเริ่มหน้าใหม่ที่กรอบนี้
-                    if (lastFit !== null) flush(lastFit);
-                    lastFit = null;
-                    pageStart = sec.top;
-                    // กรอบเดียวสูงเกินหน้า → ตัดเป็นช่วงๆ เท่าที่จำเป็น
-                    while (sec.bottom - pageStart > sliceHpx) flush(pageStart + sliceHpx);
-                    lastFit = sec.bottom;
-                });
-                if (lastFit !== null && lastFit > pageStart) {
-                    // หน้าสุดท้าย — รวม padding ล่างถ้ายังพอ
-                    flush(Math.min(canvas.height, Math.max(lastFit, Math.min(pageStart + sliceHpx, canvas.height))));
+                if (cv.height / pxPerPt <= availH) {
+                    addFitOnePage(cv);
+                } else {
+                    let y = 0;
+                    while (y < cv.height) { addSlice(cv, y, Math.min(sliceHpx, cv.height - y), pxPerPt); y += sliceHpx; }
                 }
             };
 
             addFitOnePage(mainCanvas);
-            if (galCanvas) addBySections(galCanvas, galSecs);
+
+            if (withGallery) {
+                buildGallery('pdf');
+                const gal = document.getElementById('photo-gallery');
+                gal.style.display = 'block';
+                for (const sec of gal.querySelectorAll('.gal-sec')) await addSection(sec);
+                gal.style.display = 'none';
+            }
+
             _download(pdf.output('datauristring'), `BD_${name}.pdf`);
         }
     } catch (err) {
