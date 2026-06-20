@@ -2909,8 +2909,9 @@ async function doExportPDF() {
     closePDFPicker();
     const fmt  = document.querySelector('input[name="pdf-fmt"]:checked')?.value || 'landscape';
     if (rowItem) {
-        openEditMode(rowItem);
-        setTimeout(() => exportPDF(fmt), 450);
+        openEditMode(rowItem, 'whyedit');
+        lockExceptWhy(false);   // ปลด disabled ก่อน capture — value ยังครบ, background ไม่เทา
+        setTimeout(() => exportPDF(fmt), 800);
     } else {
         exportPDF(fmt);
     }
@@ -2929,7 +2930,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v36';
+const EXPORT_VER = 'v37';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
