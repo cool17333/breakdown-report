@@ -557,22 +557,26 @@
 
 <!-- ==================== ACCEPT JOB MODAL ==================== -->
 <div id="accept-modal" class="modal-bg hidden">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-        <h2 class="text-base font-bold mb-1 flex items-center gap-2 text-blue-700">✅ ยืนยันรับงาน</h2>
-        <p id="accept-tracking-display" class="text-xs text-gray-500 font-mono mb-4"></p>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div class="bg-orange-500 px-6 py-4">
+            <h2 class="text-base font-bold text-white flex items-center gap-2">✅ ยืนยันรับงาน</h2>
+            <p id="accept-tracking-display" class="text-xs text-orange-100 font-mono mt-0.5"></p>
+        </div>
+        <div class="p-6">
         <label class="text-xs font-bold text-gray-500 block mb-1">ชื่อผู้รับงาน <span class="text-red-500">*</span></label>
         <input id="accept-byname" type="text" placeholder="กรอกชื่อ-นามสกุลผู้รับงาน"
-               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition-colors mb-4">
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-orange-500 transition-colors mb-4">
         <div class="flex gap-3">
             <button onclick="closeAcceptModal()"
                     class="flex-1 py-2 rounded-xl border border-gray-300 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-colors">
                 ยกเลิก
             </button>
             <button onclick="confirmAccept()"
-                    class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors">
+                    class="flex-1 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-colors">
                 ✅ ยืนยันรับงาน
             </button>
         </div>
+        </div><!-- /p-6 -->
     </div>
 </div>
 
@@ -595,10 +599,12 @@
 
 <!-- ==================== REPORT POPUP (แจ้ง Breakdown) ==================== -->
 <div id="report-modal" class="modal-bg hidden">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto">
-        <h2 class="text-lg font-bold mb-1 flex items-center gap-2">🚨 แจ้ง Breakdown</h2>
-        <p class="text-xs text-gray-400 mb-4">กรอกข้อมูลเหตุเครื่องจักรเสีย</p>
-
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[92vh] flex flex-col">
+        <div class="bg-red-600 px-6 py-4 flex-shrink-0">
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">🚨 แจ้ง Breakdown</h2>
+            <p class="text-xs text-red-200 mt-0.5">กรอกข้อมูลเหตุเครื่องจักรเสีย</p>
+        </div>
+        <div class="p-6 overflow-y-auto">
         <div class="space-y-3 text-sm">
             <div>
                 <label class="text-xs font-bold text-gray-600 block mb-1">ชื่อเครื่องจักร <span class="text-red-500">*</span></label>
@@ -656,6 +662,7 @@
             <button onclick="closeReportModal()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">ยกเลิก</button>
             <button id="rm-submit" onclick="submitReportPopup()" class="px-6 py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-full text-sm transition-colors flex items-center gap-2">🚨 แจ้ง Breakdown</button>
         </div>
+        </div><!-- /p-6 scroll -->
     </div>
 </div>
 
@@ -2930,7 +2937,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v37';
+const EXPORT_VER = 'v38';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
