@@ -2223,6 +2223,8 @@ function buildGallery(mode = 'pdf') {
     wrap.innerHTML = '';
 
     const cols = mode === 'png' ? 3 : 2;
+    // pdf: ปรับคอลัมน์อัตโนมัติให้กรอบสั้นลง → ทุกรูปของ Why อยู่หน้าเดียวกัน
+    const secCols = (n) => mode === 'pdf' ? (n <= 2 ? 2 : n <= 6 ? 3 : 4) : cols;
 
     const mkImgCell = (src) => {
         const d = document.createElement('div');
@@ -2281,7 +2283,7 @@ function buildGallery(mode = 'pdf') {
             : { border:'#93c5fd', bg:'#eff6ff', badgeBg:'#dbeafe', badgeTx:'#1d4ed8', badgeBd:'#bfdbfe' };
         const frame = mkFrame(color, 'Why ' + sec.label, sec.text);
         const grid = document.createElement('div');
-        grid.style.cssText = `display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:14px`;
+        grid.style.cssText = `display:grid;grid-template-columns:repeat(${secCols(sec.images.length)},minmax(0,1fr));gap:14px`;
         sec.images.forEach(im => grid.appendChild(mkImgCell(im.data)));
         frame.appendChild(grid);
         wrap.appendChild(frame);
@@ -2950,7 +2952,7 @@ function _download(href, filename) {
 }
 
 // เวอร์ชันโค้ด export — โชว์มุมล่างขวาของไฟล์ + หน้าเว็บ ไว้เช็คปัญหา cache รุ่นเก่า
-const EXPORT_VER = 'v40';
+const EXPORT_VER = 'v41';
 
 // html2canvas วาดข้อความฟอนต์ Prompt จมลง ~0.45em (ทุก span/ป้าย/ปุ่ม)
 // → วัดค่าจริงบนเครื่องนี้ครั้งเดียวด้วย probe เล็กๆ แล้วใช้ชดเชยตอน capture จริง
@@ -3180,7 +3182,7 @@ async function exportPDF(fmt = 'portrait') {
     // (จอแคบ/มือถือ → fallback ความกว้าง desktop 1150 เพื่อให้รายงานคงรูปแบบเดิม)
     const liveW  = Math.round(document.getElementById('report-content').getBoundingClientRect().width);
     const CAP_W  = Math.max(1150, liveW);
-    const withGallery = hasWhyImages();
+    const withGallery = hasGalleryContent();
 
     btn.disabled = true; btn.classList.add('opacity-50');
     loader.classList.remove('hidden');
@@ -3232,18 +3234,19 @@ async function exportPDF(fmt = 'portrait') {
                 pdf.addImage(tmp.toDataURL('image/jpeg', 0.85), 'JPEG', M, M, availW, sh / pxPerPt);
             };
 
-            // gallery: จับทีละ .gal-sec → canvas เล็กๆ ไม่ชนลิมิต browser
-            const addSection = async (sec) => {
-                const cv = await _captureNode(sec, CAP_W);
-                const pxPerPt  = cv.width / availW;
-                const sliceHpx = Math.floor(availH * pxPerPt);
-                if (cv.height / pxPerPt <= availH) {
-                    addFitOnePage(cv);
-                } else {
-                    let y = 0;
-                    while (y < cv.height) { addSlice(cv, y, Math.min(sliceHpx, cv.height - y), pxPerPt); y += sliceHpx; }
-                }
+            // gallery: ห่อ .gal-sec ใน holder เพื่อไม่ให้ _captureNode เขียนทับ inline style ของกรอบ
+            const captureSection = async (sec) => {
+                const holder = document.createElement('div');
+                holder.style.background = '#ffffff';
+                sec.parentNode.insertBefore(holder, sec);
+                holder.appendChild(sec);
+                const cv = await _captureNode(holder, CAP_W);
+                holder.parentNode.insertBefore(sec, holder);
+                holder.remove();
+                return cv;
             };
+            // ทุก section = 1 หน้า (ย่อให้พอดี) → รูปทุกอันของ Why เดียวกันอยู่หน้าเดียวกัน
+            const addSection = async (sec) => { addFitOnePage(await captureSection(sec)); };
 
             addFitOnePage(mainCanvas);
 
